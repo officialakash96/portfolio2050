@@ -1,0 +1,27 @@
+<h2>Design Section 1: Integration & Trigger</h2>
+<p class="subtitle">How the game appears within your resume flow</p>
+
+<div class="mockup">
+  <div class="mockup-header">Bottom of Resume Page</div>
+  <div class="mockup-body" style="background: #050505; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+    <div style="width: 100%; height: 50px; border-top: 1px solid #333; display: flex; align-items: center; justify-content: center; opacity: 0.5;">[ Footer Area ]</div>
+    
+    <div class="reveal-container" style="text-align: center; border: 1px dashed var(--accent-cyan); padding: 20px; width: 80%;">
+      <p style="color: var(--accent-cyan); font-family: 'Orbitron'; margin-bottom: 15px;">THANKS FOR YOUR ATTENTION TO ME. HERE:</p>
+      <div class="cyber-btn" style="padding: 10px 20px; font-size: 0.8rem;">INITIATE_GAME.EXE</div>
+    </div>
+    
+    <div class="game-placeholder" style="width: 100%; height: 150px; background: rgba(0, 243, 255, 0.05); border: 1px solid var(--accent-cyan); display: flex; align-items: center; justify-content: center; position: relative;">
+      <p style="font-size: 0.7rem; color: var(--accent-cyan);">Canvas Game Window (Hidden until Triggered)</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Integration Details</h3>
+  <ul>
+    <li><strong>Location:</strong> Directly below the <code>&lt;footer&gt;</code> in <code>index.html</code>.</li>
+    <li><strong>Reveal Logic:</strong> Uses GSAP <code>ScrollTrigger</code> to detect when the user hits the bottom. A terminal-style prompt appears first.</li>
+    <li><strong>State Management:</strong> The game engine only starts when the "INITIATE" button is clicked, saving resources until needed.</li>
+  </ul>
+</div>

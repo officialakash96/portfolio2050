@@ -1,0 +1,32 @@
+<h2>Game Implementation Approaches</h2>
+<p class="subtitle">Choosing the right engine for smoothness and performance</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="canvas" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>HTML5 Canvas (Recommended)</h3>
+      <p>Custom 2D rendering loop. Smooth 60FPS, efficient collision detection, and full control over "cyber" visual effects.</p>
+      <div class="pros-cons">
+        <div class="pros"><ul><li>Ultra-smooth</li><li>Efficient</li></ul></div>
+        <div class="cons"><ul><li>Direct pixel manipulation</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="dom" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>DOM & CSS (Simple)</h3>
+      <p>Uses <code>&lt;div&gt;</code> elements and CSS transitions for movement. Easier to style with existing theme.</p>
+      <div class="pros-cons">
+        <div class="pros"><ul><li>Uses standard HTML</li><li>Easy to theme</li></ul></div>
+        <div class="cons"><ul><li>Lower performance</li><li>Clunky collisions</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>My Recommendation</h3>
+  <p>I recommend <strong>Approach A (Canvas)</strong>. Since you want "sophisticated animations" and a "cyberpunk" feel, Canvas allows us to create glowing trails, CRT scanlines inside the game, and particle effects without slowing down the rest of your site.</p>
+</div>

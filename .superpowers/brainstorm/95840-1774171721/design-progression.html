@@ -1,0 +1,36 @@
+<h2>Design Section 2: Game Progression & High Score</h2>
+<p class="subtitle">Session-based scoring and reward system</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">HUD Layout</div>
+    <div class="mockup-body" style="background: #050505; color: var(--accent-cyan); font-family: 'Roboto Mono'; padding: 15px;">
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(0, 243, 255, 0.2); padding-bottom: 5px; margin-bottom: 10px;">
+        <span>SCORE: 01420</span>
+        <span style="color: var(--accent-pink);">BEST: 03500</span>
+      </div>
+      <div style="font-size: 0.7rem; color: var(--text-secondary);">
+        TRACK_LEVEL: 1 [RESUME_FACT_LOCKED]
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Session Logic</div>
+    <div class="mockup-body">
+      <ul>
+        <li><strong>Storage:</strong> <code>sessionStorage</code> (cleared on tab close).</li>
+        <li><strong>Persistence:</strong> Updates in real-time as the user plays.</li>
+        <li><strong>UI:</strong> High score appears in the game's top-right corner.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Progression Mechanics</h3>
+  <ul>
+    <li><strong>Scoring:</strong> Points awarded for every second survived and for "grazing" obstacles (extra risk = extra points).</li>
+    <li><strong>Level Triggers:</strong> Every 500 points, a "Data Fact" about you is revealed (e.g., "Akash once automated a 4-hour task into 5 minutes!").</li>
+    <li><strong>Game Over:</strong> Simple "SYSTEM_CRASH" message with a button to REBOOT (Retry).</li>
+  </ul>
+</div>

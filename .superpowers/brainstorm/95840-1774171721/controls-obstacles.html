@@ -1,0 +1,58 @@
+<h2>Game Interaction Design</h2>
+<p class="subtitle">Adaptive controls for desktop and mobile</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Desktop Layout</div>
+    <div class="mockup-body">
+      <div class="placeholder" style="height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <p>Keyboard Control</p>
+        <div style="display: flex; gap: 5px;">
+          <div class="mock-button" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">←</div>
+          <div class="mock-button" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">→</div>
+        </div>
+        <p style="font-size: 0.7rem; margin-top: 10px;">Left/Right or A/D Keys</p>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Mobile Layout</div>
+    <div class="mockup-body">
+      <div class="placeholder" style="height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <p>Touch Drag</p>
+        <div style="width: 50px; height: 10px; border-radius: 5px; background: var(--accent-cyan); position: relative;">
+            <div style="width: 20px; height: 20px; border-radius: 50%; background: white; border: 2px solid var(--accent-cyan); position: absolute; top: -5px; left: 15px;"></div>
+        </div>
+        <p style="font-size: 0.7rem; margin-top: 10px;">Drag Truck Left/Right</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Dodge Obstacle Ideas</h3>
+  <p>What should the Cybertruck be dodging? (Choose one or suggest another)</p>
+  <div class="options">
+    <div class="option" data-choice="potholes" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Digital Potholes</h3>
+        <p>Glowing neon rifts in the road surface.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="drones" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Surveillance Drones</h3>
+        <p>Low-flying robotic obstacles that drift across lanes.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="debris" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Technical Debris</h3>
+        <p>Floating code blocks or circuit boards blocking the path.</p>
+      </div>
+    </div>
+  </div>
+</div>

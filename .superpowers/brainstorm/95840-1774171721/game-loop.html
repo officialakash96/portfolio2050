@@ -1,0 +1,49 @@
+<h2>Obstacle Design</h2>
+<p class="subtitle">A mix of aerial and ground-based threats</p>
+
+<div class="mockup">
+  <div class="mockup-header">Game Screen Mockup</div>
+  <div class="mockup-body" style="background: #050505; height: 300px; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center;">
+    <!-- Road Perspective -->
+    <div style="width: 100%; height: 100%; background: linear-gradient(0deg, #111 0%, #000 100%); position: absolute; top: 0; left: 0;"></div>
+    <div style="width: 200%; height: 200%; background-image: linear-gradient(rgba(0, 243, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.1) 1px, transparent 1px); background-size: 40px 40px; transform: perspective(150px) rotateX(60deg); position: absolute; top: -50%; left: -50%;"></div>
+    
+    <!-- Obstacle B: Drone -->
+    <div style="position: absolute; top: 30%; left: 20%; width: 40px; height: 20px; background: #ff0055; border-radius: 5px; box-shadow: 0 0 10px #ff0055;">
+      <div style="position: absolute; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; top: 3px; left: 13px;"></div>
+      <p style="font-size: 8px; color: white; position: absolute; bottom: -12px; width: 100%; text-align: center;">DRONE_ID:04</p>
+    </div>
+
+    <!-- Obstacle C: Code Block -->
+    <div style="position: absolute; top: 50%; left: 70%; width: 50px; height: 30px; background: rgba(0, 243, 255, 0.2); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); font-size: 10px; padding: 5px; box-sizing: border-box;">
+      <code>&lt;DIV&gt;</code>
+    </div>
+
+    <!-- Cybertruck -->
+    <div style="position: absolute; bottom: 20px; width: 60px; height: 30px; background: #333; clip-path: polygon(0 100%, 10% 40%, 40% 0, 80% 0, 100% 40%, 100% 100%); border: 1px solid #777;">
+      <div style="width: 10px; height: 5px; background: #ff0055; position: absolute; bottom: 2px; left: 5px; box-shadow: 0 0 5px #ff0055;"></div>
+      <div style="width: 10px; height: 5px; background: #ff0055; position: absolute; bottom: 2px; right: 5px; box-shadow: 0 0 5px #ff0055;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Game Loop & Progression</h3>
+  <p>How should the game end or reset?</p>
+  <div class="options">
+    <div class="option" data-choice="high-score" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Infinite Loop + High Score</h3>
+        <p>Speed increases over time. Survive as long as possible. Shows personal best.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="levels" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Level System</h3>
+        <p>Short bursts of gameplay. Finish a "track" to unlock a fun fact about you.</p>
+      </div>
+    </div>
+  </div>
+</div>
