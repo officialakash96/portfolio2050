@@ -4,21 +4,25 @@
  */
 
 class Player {
-    constructor(canvasWidth, canvasHeight) {
-        this.width = 60;
-        this.height = 30;
+    constructor(canvasWidth, canvasHeight, image) {
+        this.width = 35;
+        this.height = 50; 
+        this.canvasWidth = canvasWidth;
         this.x = canvasWidth / 2 - this.width / 2;
         this.y = canvasHeight - 80;
         this.targetX = this.x;
-        this.speed = 0.15; // Interpolation speed
+        this.speed = 0.1; // Slightly slower for more grace
         this.laneWidth = canvasWidth / 3;
-        this.canvasWidth = canvasWidth;
+        this.image = image;
+        this.tilt = 0;
+        this.wheelRotation = 0;
+        this.particles = [];
     }
 
     move(dir) {
-        // dir: -1 (left), 0 (center), 1 (right)
-        const lane = Math.max(0, Math.min(2, Math.floor(this.targetX / this.laneWidth) + dir));
-        this.targetX = lane * this.laneWidth + (this.laneWidth / 2 - this.width / 2);
+        const currentLane = Math.round((this.targetX - (this.laneWidth / 2 - this.width / 2)) / this.laneWidth);
+        const nextLane = Math.max(0, Math.min(2, currentLane + dir));
+        this.targetX = nextLane * this.laneWidth + (this.laneWidth / 2 - this.width / 2);
     }
 
     setTargetX(x) {
@@ -26,62 +30,150 @@ class Player {
     }
 
     update() {
-        // Smooth interpolation towards targetX
-        this.x += (this.targetX - this.x) * this.speed;
+        const dx = this.targetX - this.x;
+        this.x += dx * this.speed;
+        // Subtler tilt for graceful movement
+        this.tilt = dx * 0.02;
+        this.wheelRotation += 0.2;
+        
+        if (Math.random() > 0.4) {
+            this.particles.push({
+                x: this.x + this.width / 2 + (Math.random() - 0.5) * 15,
+                y: this.y + this.height,
+                size: 1 + Math.random() * 2,
+                life: 1,
+                vY: 2 + Math.random() * 2
+            });
+        }
+        this.particles.forEach((p, i) => {
+            p.y += p.vY;
+            p.life -= 0.05;
+            if (p.life <= 0) this.particles.splice(i, 1);
+        });
     }
 
     draw(ctx) {
         ctx.save();
+        
+        // 1. Draw Exhaust
+        this.particles.forEach(p => {
+            ctx.fillStyle = `rgba(0, 243, 255, ${p.life * 0.4})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+        ctx.rotate(this.tilt);
+        ctx.translate(-this.width / 2, -this.height / 2);
+
+        // 2. Draw Wheels
+        const wheelW = 6;
+        const wheelH = 10;
+        const drawWheel = (wx, wy) => {
+            ctx.save();
+            ctx.fillStyle = '#111';
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 1;
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#00f3ff';
+            ctx.strokeRect(wx, wy, wheelW, wheelH);
+            ctx.restore();
+        };
+        drawWheel(-3, 5); // FL
+        drawWheel(this.width - 3, 5); // FR
+        drawWheel(-3, this.height - 15); // BL
+        drawWheel(this.width - 3, this.height - 15); // BR
+
+        // 3. Main Chassis
+        ctx.save();
+        ctx.fillStyle = '#1a1a1a';
         ctx.strokeStyle = '#00f3ff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.shadowBlur = 10;
         ctx.shadowColor = '#00f3ff';
-
-        // Draw stylized Cybertruck (trapezoidal)
+        
         ctx.beginPath();
-        // Base
-        ctx.moveTo(this.x, this.y + this.height);
-        ctx.lineTo(this.x + this.width, this.y + this.height);
-        // Right side
-        ctx.lineTo(this.x + this.width * 0.8, this.y + this.height * 0.2);
-        // Top
-        ctx.lineTo(this.x + this.width * 0.3, this.y);
-        // Left side
-        ctx.lineTo(this.x, this.y + this.height);
+        ctx.moveTo(5, 0); 
+        ctx.lineTo(this.width - 5, 0);
+        ctx.lineTo(this.width, 10);
+        ctx.lineTo(this.width, this.height - 5);
+        ctx.lineTo(this.width - 2, this.height);
+        ctx.lineTo(2, this.height);
+        ctx.lineTo(0, this.height - 5);
+        ctx.lineTo(0, 10);
         ctx.closePath();
+        ctx.fill();
         ctx.stroke();
 
-        // Add some detail lines
+        // 4. Cockpit
+        ctx.fillStyle = 'rgba(0, 243, 255, 0.2)';
         ctx.beginPath();
-        ctx.moveTo(this.x + this.width * 0.3, this.y);
-        ctx.lineTo(this.x + this.width * 0.8, this.y + this.height * 0.2);
+        ctx.moveTo(8, 12);
+        ctx.lineTo(this.width - 8, 12);
+        ctx.lineTo(this.width - 5, 25);
+        ctx.lineTo(5, 25);
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
 
+        // 5. Hood Logo
+        if (this.image && this.image.complete) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(this.image, 10, 2, this.width - 20, 8);
+            ctx.restore();
+        }
+
+        // 6. Tail Lights
+        ctx.fillStyle = '#ff003c';
+        ctx.shadowColor = '#ff003c';
+        ctx.fillRect(3, this.height - 3, 8, 2);
+        ctx.fillRect(this.width - 11, this.height - 3, 8, 2);
+
+        ctx.restore();
         ctx.restore();
     }
 }
 
 class Obstacle {
     constructor(canvasWidth, type) {
-        this.width = type === 'code' ? 80 : 40;
+        this.width = type === 'drone' ? 40 : 50;
         this.height = 30;
         this.x = Math.random() * (canvasWidth - this.width);
         this.y = -50;
-        this.type = type; // 'drone' or 'code'
+        this.type = type; // 'drone', 'shard', or 'glitch'
         this.speed = 3 + Math.random() * 2;
-        this.text = type === 'code' ? this.getRandomCodeSnippet() : '';
         this.blinkTimer = 0;
         this.closeCall = false;
+        this.glitchChars = ['█', '▓', '▒', '░', '!', '#', '$', '%', '&'];
+        this.currentGlitch = this.getRandomGlitch();
+        this.trail = [];
     }
 
-    getRandomCodeSnippet() {
-        const snippets = ['<div>', 'const', 'await', 'fetch()', 'git push', 'npm i', '<h1>'];
-        return snippets[Math.floor(Math.random() * snippets.length)];
+    getRandomGlitch() {
+        let str = '';
+        for (let i = 0; i < 4; i++) {
+            str += this.glitchChars[Math.floor(Math.random() * this.glitchChars.length)];
+        }
+        return str;
     }
 
     update() {
         this.y += this.speed;
         this.blinkTimer++;
+
+        // Update trail for shards
+        if (this.type === 'shard') {
+            this.trail.push({ x: this.x, y: this.y });
+            if (this.trail.length > 5) this.trail.shift();
+        }
+
+        // Randomize glitch text every few frames
+        if (this.type === 'glitch' && this.blinkTimer % 5 === 0) {
+            this.currentGlitch = this.getRandomGlitch();
+        }
     }
 
     draw(ctx) {
@@ -89,7 +181,7 @@ class Obstacle {
         if (this.type === 'drone') {
             ctx.strokeStyle = '#ff003c';
             ctx.shadowColor = '#ff003c';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 15;
             ctx.lineWidth = 2;
             
             // Body
@@ -99,23 +191,53 @@ class Obstacle {
             if (Math.floor(this.blinkTimer / 10) % 2 === 0) {
                 ctx.fillStyle = '#ff003c';
                 ctx.beginPath();
-                ctx.arc(this.x + 10, this.y + 10, 3, 0, Math.PI * 2);
-                ctx.arc(this.x + this.width - 10, this.y + 10, 3, 0, Math.PI * 2);
+                ctx.arc(this.x + 10, this.y + 10, 4, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width - 10, this.y + 10, 4, 0, Math.PI * 2);
                 ctx.fill();
             }
-        } else {
+        } else if (this.type === 'shard') {
+            // Draw trail
+            ctx.globalAlpha = 0.3;
+            this.trail.forEach((pos, i) => {
+                ctx.fillStyle = `rgba(0, 243, 255, ${i * 0.1})`;
+                this.drawShard(ctx, pos.x, pos.y);
+            });
+            
+            // Main Shard
+            ctx.globalAlpha = 1;
             ctx.strokeStyle = '#00f3ff';
-            ctx.fillStyle = '#00f3ff';
             ctx.shadowColor = '#00f3ff';
-            ctx.shadowBlur = 5;
+            ctx.shadowBlur = 10;
+            ctx.lineWidth = 2;
+            this.drawShard(ctx, this.x, this.y, true);
+        } else if (this.type === 'glitch') {
+            ctx.strokeStyle = '#f0db4f';
+            ctx.fillStyle = '#f0db4f';
+            ctx.shadowColor = '#f0db4f';
+            ctx.shadowBlur = 10;
             ctx.lineWidth = 1;
             
             ctx.strokeRect(this.x, this.y, this.width, this.height);
-            ctx.font = '12px "Roboto Mono"';
+            ctx.font = '14px "Roboto Mono"';
             ctx.textAlign = 'center';
-            ctx.fillText(this.text, this.x + this.width / 2, this.y + this.height / 2 + 5);
+            ctx.fillText(this.currentGlitch, this.x + this.width / 2, this.y + this.height / 2 + 5);
+            
+            // Random horizontal flicker lines
+            if (Math.random() > 0.8) {
+                ctx.fillRect(this.x - 10, this.y + Math.random() * 30, this.width + 20, 2);
+            }
         }
         ctx.restore();
+    }
+
+    drawShard(ctx, x, y, stroke = false) {
+        ctx.beginPath();
+        ctx.moveTo(x + this.width / 2, y);
+        ctx.lineTo(x + this.width, y + this.height);
+        ctx.lineTo(x, y + this.height);
+        ctx.closePath();
+        if (stroke) ctx.stroke();
+        else ctx.fill();
     }
 }
 
@@ -155,7 +277,12 @@ class Game {
         this.factIndex = 0;
 
         this.resize();
-        this.player = new Player(this.canvas.width, this.canvas.height);
+        
+        // Load Player Image
+        this.playerImage = new Image();
+        this.playerImage.src = 'static/cyberpunk_car.jpg';
+        
+        this.player = new Player(this.canvas.width || 800, this.canvas.height || 400, this.playerImage);
         
         this.initControls();
         this.bindEvents();
@@ -221,7 +348,13 @@ class Game {
     }
 
     spawnObstacle() {
-        const type = Math.random() > 0.3 ? 'drone' : 'code';
+        if (this.frameCount < 120) return; // 2 second safety delay at 60fps
+        
+        const rand = Math.random();
+        let type = 'drone';
+        if (rand > 0.6) type = 'shard';
+        else if (rand > 0.3) type = 'glitch';
+        
         this.obstacles.push(new Obstacle(this.canvas.width, type));
     }
 
@@ -250,12 +383,19 @@ class Game {
 
     checkCollisions() {
         for (const obs of this.obstacles) {
-            // Collision check
+            // Precise collision check (shrunk box for better feel)
+            const pBox = { 
+                x: this.player.x + 5, 
+                y: this.player.y + 5, 
+                w: this.player.width - 10, 
+                h: this.player.height - 10 
+            };
+            
             if (
-                this.player.x < obs.x + obs.width &&
-                this.player.x + this.player.width > obs.x &&
-                this.player.y < obs.y + obs.height &&
-                this.player.y + this.player.height > obs.y
+                pBox.x < obs.x + obs.width &&
+                pBox.x + pBox.w > obs.x &&
+                pBox.y < obs.y + obs.height &&
+                pBox.y + pBox.h > obs.y
             ) {
                 this.gameOver();
                 return;
@@ -376,6 +516,12 @@ class Game {
         this.container.classList.add('visible');
         this.container.classList.remove('hidden');
         document.querySelector('.terminal-msg').classList.add('hidden');
+        
+        // Recalculate dimensions now that container is visible
+        this.resize();
+        this.player.x = this.canvas.width / 2 - this.player.width / 2;
+        this.player.targetX = this.player.x;
+
         this.isPaused = false;
         if (!this.animationId) {
             this.gameLoop();
@@ -388,7 +534,7 @@ class Game {
         this.obstacles = [];
         this.isGameOver = false;
         this.difficulty = 1;
-        this.frameCount = 0;
+        this.frameCount = 0; // Resets the 2s safety delay
         this.lastFactScore = 0;
         this.factTimer = 0;
         this.overlay.classList.add('hidden');

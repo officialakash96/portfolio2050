@@ -11,6 +11,15 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Site Preloader -->
+    <div id="site-preloader">
+        <div class="preloader-content">
+            <h1 class="glitch" data-text="SYSTEM_BOOT">SYSTEM_BOOT</h1>
+            <div class="loader-bar"></div>
+            <p>INITIALIZING_NEURAL_LINK...</p>
+        </div>
+    </div>
+
     <!-- HUD Scroll Progress -->
     <div class="scroll-progress"></div>
 
@@ -165,7 +174,11 @@
     </main>
 
     <section id="game-trigger" class="reveal">
-        <div class="terminal-msg">
+        <div id="game-preloader">
+            <div class="loader-bar"></div>
+            <p>LOADING_REWARD.SYS...</p>
+        </div>
+        <div class="terminal-msg hidden">
             <p>THANKS FOR YOUR ATTENTION TO ME. HERE IS YOUR REWARD🎁!</p>
             <button id="init-game" class="cyber-btn">INITIATE_GAME.EXE</button>
         </div>
