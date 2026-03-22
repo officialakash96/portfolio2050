@@ -109,4 +109,50 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     });
+
+    // 6. Game Reveal ScrollTrigger
+    gsap.from('#game-trigger .terminal-msg', {
+        scrollTrigger: {
+            trigger: '#game-trigger',
+            start: "top 90%",
+            toggleActions: "play none none none"
+        },
+        y: 50,
+        opacity: 0,
+        duration: 1,
+        ease: "power3.out"
+    });
+
+    // Performance: Pause game when not in view
+    const gameCanvas = document.getElementById('cybertruck-game');
+    if (gameCanvas) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                window.dispatchEvent(new CustomEvent('gameVisibilityChange', { 
+                    detail: { isVisible: entry.isIntersecting } 
+                }));
+            });
+        }, { threshold: 0.1 });
+        observer.observe(gameCanvas);
+    }
+
+    // Performance: Pause game when tab is hidden
+    document.addEventListener('visibilitychange', () => {
+        window.dispatchEvent(new CustomEvent('gameVisibilityChange', { 
+            detail: { isVisible: !document.hidden } 
+        }));
+    });
+
+    // Performance: Pause game when window loses focus
+    window.addEventListener('blur', () => {
+        window.dispatchEvent(new CustomEvent('gameVisibilityChange', { 
+            detail: { isVisible: false } 
+        }));
+    });
+
+    window.addEventListener('focus', () => {
+        window.dispatchEvent(new CustomEvent('gameVisibilityChange', { 
+            detail: { isVisible: true } 
+        }));
+    });
 });

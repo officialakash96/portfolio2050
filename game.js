@@ -140,6 +140,7 @@ class Game {
         this.spawnRate = 60; // frames between spawns
         this.frameCount = 0;
         this.difficulty = 1;
+        this.animationId = null;
 
         // Reward / Fact system
         this.facts = [
@@ -160,6 +161,22 @@ class Game {
         this.bindEvents();
         
         window.addEventListener('resize', () => this.resize());
+
+        // Performance: Listen for visibility changes
+        window.addEventListener('gameVisibilityChange', (e) => {
+            const wasPaused = this.isPaused;
+            const isGameStarted = !this.container.classList.contains('hidden');
+            
+            this.isPaused = !e.detail.isVisible || this.isGameOver || !isGameStarted;
+            
+            // Resume loop if it was paused only by visibility/focus and now is visible/focused, 
+            // but ONLY if the game has actually been started by the user.
+            if (wasPaused && !this.isPaused && isGameStarted && !this.isGameOver) {
+                if (!this.animationId) {
+                    this.gameLoop();
+                }
+            }
+        });
     }
 
     resize() {
@@ -169,6 +186,9 @@ class Game {
         if (this.player) {
             this.player.canvasWidth = this.canvas.width;
             this.player.laneWidth = this.canvas.width / 3;
+            // Reposition player to keep in bounds
+            this.player.x = Math.max(0, Math.min(this.canvas.width - this.player.width, this.player.x));
+            this.player.targetX = Math.max(0, Math.min(this.canvas.width - this.player.width, this.player.targetX));
         }
     }
 
@@ -339,17 +359,27 @@ class Game {
     }
 
     gameLoop() {
-        if (this.isPaused) return; // Optimization: don't loop if paused
+        if (this.isPaused) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+            return;
+        }
         this.update();
         this.draw();
-        requestAnimationFrame(() => this.gameLoop());
+        this.animationId = requestAnimationFrame(() => this.gameLoop());
     }
 
     start() {
+        this.container.classList.add('active');
+        // Force a reflow to ensure display: block is applied before adding .visible
+        this.container.offsetHeight; 
+        this.container.classList.add('visible');
         this.container.classList.remove('hidden');
         document.querySelector('.terminal-msg').classList.add('hidden');
         this.isPaused = false;
-        this.gameLoop();
+        if (!this.animationId) {
+            this.gameLoop();
+        }
     }
 
     restart() {
@@ -367,7 +397,9 @@ class Game {
         
         if (this.isPaused) {
             this.isPaused = false;
-            this.gameLoop();
+            if (!this.animationId) {
+                this.gameLoop();
+            }
         }
     }
 
