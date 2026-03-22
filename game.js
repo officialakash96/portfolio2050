@@ -71,6 +71,7 @@ class Obstacle {
         this.speed = 3 + Math.random() * 2;
         this.text = type === 'code' ? this.getRandomCodeSnippet() : '';
         this.blinkTimer = 0;
+        this.closeCall = false;
     }
 
     getRandomCodeSnippet() {
@@ -130,7 +131,7 @@ class Game {
         this.highScoreEl = document.getElementById('high-score');
         
         this.score = 0;
-        this.highScore = localStorage.getItem('cybertruck-high-score') || 0;
+        this.highScore = sessionStorage.getItem('cyber-best') || 0;
         this.highScoreEl.textContent = this.highScore.toString().padStart(5, '0');
         
         this.isPaused = true;
@@ -139,6 +140,18 @@ class Game {
         this.spawnRate = 60; // frames between spawns
         this.frameCount = 0;
         this.difficulty = 1;
+
+        // Reward / Fact system
+        this.facts = [
+            "Akash once automated a 4-hour task into 5 minutes!",
+            "Expertise in API integrations and technical troubleshooting.",
+            "Currently advancing in Data Science at IIT Guwahati.",
+            "7+ years of experience in Technical Solutions & SRE."
+        ];
+        this.currentFact = '';
+        this.factTimer = 0;
+        this.lastFactScore = 0;
+        this.factIndex = 0;
 
         this.resize();
         this.player = new Player(this.canvas.width, this.canvas.height);
@@ -192,8 +205,32 @@ class Game {
         this.obstacles.push(new Obstacle(this.canvas.width, type));
     }
 
+    showFact(fact) {
+        this.currentFact = fact;
+        this.factTimer = 180; // Show for 3 seconds (60fps)
+    }
+
+    updateScore(points) {
+        this.score += points;
+        this.scoreEl.textContent = Math.floor(this.score).toString().padStart(5, '0');
+        
+        // Check for 500 point intervals for facts
+        if (this.score - this.lastFactScore >= 500) {
+            this.showFact(this.facts[this.factIndex]);
+            this.factIndex = (this.factIndex + 1) % this.facts.length;
+            this.lastFactScore = this.score;
+        }
+
+        if (this.score > this.highScore) {
+            this.highScore = Math.floor(this.score);
+            sessionStorage.setItem('cyber-best', this.highScore);
+            this.highScoreEl.textContent = this.highScore.toString().padStart(5, '0');
+        }
+    }
+
     checkCollisions() {
         for (const obs of this.obstacles) {
+            // Collision check
             if (
                 this.player.x < obs.x + obs.width &&
                 this.player.x + this.player.width > obs.x &&
@@ -201,6 +238,20 @@ class Game {
                 this.player.y + this.player.height > obs.y
             ) {
                 this.gameOver();
+                return;
+            }
+
+            // Close call check
+            const margin = 25;
+            if (!obs.closeCall && 
+                this.player.x - margin < obs.x + obs.width &&
+                this.player.x + this.player.width + margin > obs.x &&
+                this.player.y - margin < obs.y + obs.height &&
+                this.player.y + this.player.height + margin > obs.y
+            ) {
+                obs.closeCall = true;
+                this.updateScore(50);
+                this.showFact("CLOSE CALL! +50");
             }
         }
     }
@@ -211,6 +262,12 @@ class Game {
         this.player.update();
 
         this.frameCount++;
+        
+        // Survival points
+        if (this.frameCount % 10 === 0) {
+            this.updateScore(1);
+        }
+
         if (this.frameCount % Math.max(20, Math.floor(this.spawnRate / this.difficulty)) === 0) {
             this.spawnObstacle();
         }
@@ -219,13 +276,16 @@ class Game {
             obs.update();
             if (obs.y > this.canvas.height) {
                 this.obstacles.splice(index, 1);
-                this.score += 10;
-                this.scoreEl.textContent = this.score.toString().padStart(5, '0');
+                this.updateScore(10);
                 this.difficulty += 0.005;
             }
         });
 
         this.checkCollisions();
+
+        if (this.factTimer > 0) {
+            this.factTimer--;
+        }
     }
 
     draw() {
@@ -236,6 +296,25 @@ class Game {
 
         this.player.draw(this.ctx);
         this.obstacles.forEach(obs => obs.draw(this.ctx));
+
+        // Draw fact if active
+        if (this.factTimer > 0) {
+            this.ctx.save();
+            this.ctx.fillStyle = '#00f3ff';
+            this.ctx.font = 'bold 16px "Roboto Mono"';
+            this.ctx.textAlign = 'center';
+            this.ctx.shadowBlur = 10;
+            this.ctx.shadowColor = '#00f3ff';
+            
+            // Background for text
+            const textWidth = this.ctx.measureText(this.currentFact).width;
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(this.canvas.width/2 - textWidth/2 - 10, 45, textWidth + 20, 30);
+            
+            this.ctx.fillStyle = '#00f3ff';
+            this.ctx.fillText(this.currentFact, this.canvas.width / 2, 65);
+            this.ctx.restore();
+        }
     }
 
     drawGrid() {
@@ -260,6 +339,7 @@ class Game {
     }
 
     gameLoop() {
+        if (this.isPaused) return; // Optimization: don't loop if paused
         this.update();
         this.draw();
         requestAnimationFrame(() => this.gameLoop());
@@ -278,25 +358,27 @@ class Game {
         this.obstacles = [];
         this.isGameOver = false;
         this.difficulty = 1;
+        this.frameCount = 0;
+        this.lastFactScore = 0;
+        this.factTimer = 0;
         this.overlay.classList.add('hidden');
         this.player.x = this.canvas.width / 2 - this.player.width / 2;
         this.player.targetX = this.player.x;
+        
+        if (this.isPaused) {
+            this.isPaused = false;
+            this.gameLoop();
+        }
     }
 
     gameOver() {
         this.isGameOver = true;
         this.overlay.classList.remove('hidden');
         
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('cybertruck-high-score', this.highScore);
-            this.highScoreEl.textContent = this.highScore.toString().padStart(5, '0');
-        }
-
         const rewardMsg = document.getElementById('game-reward-msg');
-        if (this.score > 1000) {
+        if (this.score > 2000) {
             rewardMsg.textContent = "LEGENDARY PERFORMANCE! REWARD: HIRED?";
-        } else if (this.score > 500) {
+        } else if (this.score > 1000) {
             rewardMsg.textContent = "IMPRESSIVE REFLEXES. SYSTEM STABILIZED.";
         } else {
             rewardMsg.textContent = "SYSTEM FAILURE. TRY AGAIN, RECRUIT.";
