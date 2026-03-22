@@ -121,7 +121,7 @@ body {
 
 .hero-content h1 {
     font-family: var(--font-header);
-    font-size: 3.5rem;
+    font-size: clamp(2rem, 8vw, 3.5rem);
     color: white;
     margin-bottom: 0.5rem;
     position: relative;
@@ -180,9 +180,15 @@ body {
 .container {
     max-width: 1000px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1rem; /* Reduced for mobile */
     position: relative;
     z-index: 101; /* Elevated above background overlays */
+}
+
+@media (min-width: 768px) {
+    .container {
+        padding: 2rem;
+    }
 }
 
 a {
@@ -199,8 +205,10 @@ header {
     flex-direction: column;
     align-items: center;
     gap: 2rem;
-    padding: 4rem 0;
+    padding: 2rem 0;
     text-align: center;
+    width: 100%;
+    overflow: hidden;
 }
 
 @media (min-width: 768px) {
@@ -208,6 +216,7 @@ header {
         flex-direction: row;
         text-align: left;
         justify-content: center;
+        padding: 4rem 0;
     }
 }
 
@@ -302,13 +311,14 @@ header {
 }
 
 .typewriter-text {
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 4vw, 1.1rem);
     color: var(--accent-cyan);
     margin-bottom: 1.5rem;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
     display: inline-block;
     border-right: 2px solid var(--accent-cyan);
+    max-width: 100%;
 }
 
 .glitch {
