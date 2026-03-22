@@ -579,3 +579,66 @@ footer {
     opacity: 0;
     transform: translateY(30px);
 }
+
+/* --- Game Section --- */
+#game-trigger {
+    padding: 6rem 2rem;
+    text-align: center;
+    background: rgba(0, 243, 255, 0.02);
+    border-top: 1px dashed rgba(0, 243, 255, 0.2);
+    width: 100%;
+}
+.terminal-msg p {
+    font-family: var(--font-header);
+    color: var(--accent-cyan);
+    margin-bottom: 2rem;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+}
+#game-container {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    margin: 2rem auto;
+    height: 500px;
+    background: #000;
+    border: 2px solid var(--accent-cyan);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+    overflow: hidden;
+    display: none;
+}
+#game-container.active { display: block; }
+#cybertruck-game { width: 100%; height: 100%; cursor: crosshair; background: #050505; }
+#game-hud {
+    position: absolute;
+    top: 15px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--accent-cyan);
+    font-family: var(--font-body);
+    pointer-events: none;
+    z-index: 10;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+.hud-item.highlight { color: var(--accent-pink); }
+#game-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    gap: 2rem;
+}
+#game-reward-msg {
+    color: var(--accent-yellow);
+    font-family: var(--font-header);
+    font-size: 1.2rem;
+    max-width: 80%;
+}
+.hidden { display: none !important; }
