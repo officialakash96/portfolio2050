@@ -661,13 +661,33 @@ class AdminPortal {
 
         // Desktop Table Rows
         if (tbody) {
+            const currentUserId = window.cyberSupabase.currentUser?.id;
             tbody.innerHTML = this.currentUsers.map(user => {
                 const isAdmin = user.role === 'admin';
+                const isSelf = user.id === currentUserId;
+                const isSoleAdmin = isAdmin && totalAdmins <= 1;
+
+                let actionBtnHtml = '';
+                if (isSoleAdmin) {
+                    actionBtnHtml = `
+                        <button class="cyber-btn-xs btn-role-toggle disabled" disabled title="Security Lock: Cannot demote the last remaining Admin" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="fas fa-lock"></i> SOLE ADMIN
+                        </button>
+                    `;
+                } else {
+                    actionBtnHtml = `
+                        <button class="cyber-btn-xs btn-role-toggle" onclick="window.cyberAdmin.handleToggleUserRole('${user.id}', '${user.role}', '${this.escapeHtml(user.email)}')" title="Switch Clearance Level">
+                            <i class="fas fa-arrows-rotate"></i> ${isAdmin ? 'SET GUEST' : 'SET ADMIN'}
+                        </button>
+                    `;
+                }
+
                 return `
                     <tr>
                         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</td>
                         <td>
                             <strong>${this.escapeHtml(user.email)}</strong>
+                            ${isSelf ? '<span class="hud-badge" style="margin-left: 0.4rem; padding: 0.1rem 0.35rem; font-size: 0.6rem;">YOU</span>' : ''}
                         </td>
                         <td>
                             <span class="user-role-badge ${isAdmin ? 'admin' : 'guest'}">
@@ -675,11 +695,7 @@ class AdminPortal {
                             </span>
                         </td>
                         <td><span class="glow-green"><i class="fas fa-circle" style="font-size: 8px;"></i> VERIFIED</span></td>
-                        <td>
-                            <button class="cyber-btn-xs btn-role-toggle" onclick="window.cyberAdmin.handleToggleUserRole('${user.id}', '${user.role}')" title="Switch Clearance Level">
-                                <i class="fas fa-arrows-rotate"></i> ${isAdmin ? 'SET GUEST' : 'SET ADMIN'}
-                            </button>
-                        </td>
+                        <td>${actionBtnHtml}</td>
                     </tr>
                 `;
             }).join('');
@@ -687,12 +703,31 @@ class AdminPortal {
 
         // Mobile Cards List
         if (cardsContainer) {
+            const currentUserId = window.cyberSupabase.currentUser?.id;
             cardsContainer.innerHTML = this.currentUsers.map(user => {
                 const isAdmin = user.role === 'admin';
+                const isSelf = user.id === currentUserId;
+                const isSoleAdmin = isAdmin && totalAdmins <= 1;
+
+                let actionBtnHtml = '';
+                if (isSoleAdmin) {
+                    actionBtnHtml = `
+                        <button class="cyber-btn-xs btn-role-toggle disabled" disabled style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="fas fa-lock"></i> SOLE ADMIN
+                        </button>
+                    `;
+                } else {
+                    actionBtnHtml = `
+                        <button class="cyber-btn-xs btn-role-toggle" onclick="window.cyberAdmin.handleToggleUserRole('${user.id}', '${user.role}', '${this.escapeHtml(user.email)}')">
+                            <i class="fas fa-arrows-rotate"></i> ${isAdmin ? 'MAKE GUEST' : 'MAKE ADMIN'}
+                        </button>
+                    `;
+                }
+
                 return `
                     <div class="inbox-card-item">
                         <div class="inbox-card-header">
-                            <span class="inbox-card-name"><i class="fas fa-user-astronaut"></i> ${this.escapeHtml(user.email.split('@')[0])}</span>
+                            <span class="inbox-card-name"><i class="fas fa-user-astronaut"></i> ${this.escapeHtml(user.email.split('@')[0])} ${isSelf ? '(YOU)' : ''}</span>
                             <span class="inbox-card-time">${user.created_at ? new Date(user.created_at).toLocaleDateString() : ''}</span>
                         </div>
                         <div class="inbox-card-email">
@@ -702,9 +737,7 @@ class AdminPortal {
                             <span class="user-role-badge ${isAdmin ? 'admin' : 'guest'}">
                                 <i class="fas ${isAdmin ? 'fa-shield-check' : 'fa-user-shield'}"></i> ${isAdmin ? 'ADMIN' : 'GUEST'}
                             </span>
-                            <button class="cyber-btn-xs btn-role-toggle" onclick="window.cyberAdmin.handleToggleUserRole('${user.id}', '${user.role}')">
-                                <i class="fas fa-arrows-rotate"></i> ${isAdmin ? 'MAKE GUEST' : 'MAKE ADMIN'}
-                            </button>
+                            ${actionBtnHtml}
                         </div>
                     </div>
                 `;
@@ -712,16 +745,38 @@ class AdminPortal {
         }
     }
 
-    async handleToggleUserRole(userId, currentRole) {
+    async handleToggleUserRole(userId, currentRole, userEmail) {
         const newRole = currentRole === 'admin' ? 'guest' : 'admin';
-        if (!confirm(`Change clearance level for this user to '${newRole.toUpperCase()}'?`)) {
+        const currentUserId = window.cyberSupabase.currentUser?.id;
+        const totalAdmins = this.currentUsers.filter(u => u.role === 'admin').length;
+
+        // Security Guardrail 1: Prevent demoting the last remaining admin
+        if (currentRole === 'admin' && totalAdmins <= 1) {
+            alert('SECURITY LOCKOUT PROTECTION:\n\nCannot demote the last remaining Admin. The system requires at least one active Admin at all times to maintain administrative control.');
             return;
+        }
+
+        // Security Guardrail 2: Self-demotion warning
+        if (userId === currentUserId && newRole === 'guest') {
+            const confirmed = confirm(`SECURITY WARNING: SELF-DEMOTION DETECTED\n\nYou are about to demote YOUR OWN account (${userEmail}) from Admin to Guest.\n\nIf you proceed, your Admin privileges will be revoked immediately and you will lose access to the Cyber Command Console.\n\nAre you absolutely sure you want to proceed?`);
+            if (!confirmed) return;
+        } else {
+            const confirmed = confirm(`Change clearance level for ${userEmail || 'this user'} to '${newRole.toUpperCase()}'?`);
+            if (!confirmed) return;
         }
 
         try {
             await window.cyberSupabase.updateUserRole(userId, newRole);
             alert(`✓ User clearance successfully updated to ${newRole.toUpperCase()}.`);
-            this.loadUsersList();
+
+            // If admin demoted themselves, refresh session state and close admin console
+            if (userId === currentUserId && newRole === 'guest') {
+                await window.cyberSupabase.getCurrentSession();
+                this.closeAdminPortal();
+                this.checkAuthStatus();
+            } else {
+                this.loadUsersList();
+            }
         } catch (err) {
             console.error('Update role error:', err);
             alert('Error updating clearance: ' + err.message);

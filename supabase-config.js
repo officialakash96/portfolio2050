@@ -402,6 +402,18 @@ class SupabaseService {
         }
 
         try {
+            // Check if attempting to demote the sole remaining admin
+            if (newRole !== 'admin') {
+                const { data: adminProfiles, error: countErr } = await this.client
+                    .from('profiles')
+                    .select('id')
+                    .eq('role', 'admin');
+
+                if (!countErr && adminProfiles && adminProfiles.length <= 1 && adminProfiles.some(a => a.id === userId)) {
+                    throw new Error('Security Policy Lockout Violation: Cannot demote the sole active Admin account.');
+                }
+            }
+
             const { data, error } = await this.client
                 .from('profiles')
                 .update({ role: newRole })

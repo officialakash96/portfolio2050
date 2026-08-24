@@ -54,6 +54,28 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- 2.1 SECURITY LOCKOUT PROTECTION TRIGGER
+-- Strictly prevents demoting or updating the role if it is the sole remaining Admin
+create or replace function public.prevent_last_admin_demotion()
+returns trigger as $$
+declare
+  admin_count int;
+begin
+  if old.role = 'admin' and new.role <> 'admin' then
+    select count(*) into admin_count from public.profiles where role = 'admin';
+    if admin_count <= 1 then
+      raise exception 'Security Override: Cannot demote the last remaining Admin. The system must retain at least one active Admin at all times.';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists check_last_admin on public.profiles;
+create trigger check_last_admin
+  before update on public.profiles
+  for each row execute procedure public.prevent_last_admin_demotion();
+
 -- 3. SITE CONTENT TABLE (Stores Dynamic Resume & Profile Data)
 create table if not exists public.site_content (
   id text primary key default 'primary_resume',
