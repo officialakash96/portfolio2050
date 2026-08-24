@@ -500,8 +500,8 @@ class Game {
         if (!this.container || !this.canvas) return;
 
         const rect = this.container.getBoundingClientRect();
-        this.displayWidth = Math.max(320, Math.floor(rect.width));
-        this.displayHeight = Math.max(360, Math.floor(rect.height || 460));
+        this.displayWidth = Math.max(300, Math.floor(rect.width));
+        this.displayHeight = Math.max(340, Math.min(480, Math.floor(rect.height || 420)));
 
         this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -564,30 +564,37 @@ class Game {
 
         this.canvas.addEventListener('touchmove', (e) => {
             if (e.touches && e.touches[0]) {
+                if (e.cancelable) e.preventDefault();
                 handlePointerMove(e.touches[0].clientX);
             }
-        }, { passive: true });
+        }, { passive: false });
 
-        // Mobile On-Screen Virtual Buttons
+        // Mobile On-Screen Virtual Buttons with instant touchstart
         const touchLeftBtn = document.getElementById('btn-touch-left');
         const touchRightBtn = document.getElementById('btn-touch-right');
 
+        const handleLeft = (e) => {
+            if (e.cancelable) e.preventDefault();
+            if (this.isPaused || this.isGameOver) return;
+            this.player.move(-1);
+            this.sound.playBeep(320, 0.05, 'triangle', 0.08);
+        };
+
+        const handleRight = (e) => {
+            if (e.cancelable) e.preventDefault();
+            if (this.isPaused || this.isGameOver) return;
+            this.player.move(1);
+            this.sound.playBeep(360, 0.05, 'triangle', 0.08);
+        };
+
         if (touchLeftBtn) {
-            touchLeftBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (this.isPaused || this.isGameOver) return;
-                this.player.move(-1);
-                this.sound.playBeep(320, 0.05, 'triangle', 0.08);
-            });
+            touchLeftBtn.addEventListener('touchstart', handleLeft, { passive: false });
+            touchLeftBtn.addEventListener('click', handleLeft);
         }
 
         if (touchRightBtn) {
-            touchRightBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (this.isPaused || this.isGameOver) return;
-                this.player.move(1);
-                this.sound.playBeep(360, 0.05, 'triangle', 0.08);
-            });
+            touchRightBtn.addEventListener('touchstart', handleRight, { passive: false });
+            touchRightBtn.addEventListener('click', handleRight);
         }
     }
 

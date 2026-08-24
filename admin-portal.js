@@ -235,7 +235,13 @@ class AdminPortal {
     switchTab(tabId) {
         this.activeTab = tabId;
         document.querySelectorAll('.admin-nav-tab').forEach(t => {
-            t.classList.toggle('active', t.getAttribute('data-tab') === tabId);
+            const isActive = t.getAttribute('data-tab') === tabId;
+            t.classList.toggle('active', isActive);
+            if (isActive) {
+                try {
+                    t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                } catch (e) {}
+            }
         });
         document.querySelectorAll('.admin-tab-content').forEach(c => {
             c.classList.toggle('active', c.id === tabId);
@@ -411,31 +417,61 @@ class AdminPortal {
 
     async loadInboxMessages() {
         const tbody = document.getElementById('inbox-messages-tbody');
+        const cardsContainer = document.getElementById('inbox-cards-container');
         const emptyMsg = document.getElementById('inbox-empty-msg');
-        if (!tbody) return;
+        if (!tbody && !cardsContainer) return;
 
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> FETCHING TELEMETRY...</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> FETCHING TELEMETRY...</td></tr>`;
+        if (cardsContainer) cardsContainer.innerHTML = `<div style="text-align:center; padding: 2rem; color: var(--accent-cyan); font-family: var(--font-header); font-size: 0.8rem;"><i class="fas fa-spinner fa-spin"></i> FETCHING TELEMETRY...</div>`;
 
         const messages = await window.cyberSupabase.fetchContactMessages();
 
         if (!messages || messages.length === 0) {
-            tbody.innerHTML = '';
+            if (tbody) tbody.innerHTML = '';
+            if (cardsContainer) cardsContainer.innerHTML = '';
             if (emptyMsg) emptyMsg.classList.remove('hidden');
             return;
         }
 
         if (emptyMsg) emptyMsg.classList.add('hidden');
-        tbody.innerHTML = messages.map(msg => `
-            <tr>
-                <td>${new Date(msg.created_at).toLocaleString()}</td>
-                <td><strong>${this.escapeHtml(msg.name)}</strong></td>
-                <td><a href="mailto:${this.escapeHtml(msg.email)}?subject=Re: Inquiry on Akash Singh Portfolio" class="cyber-link">${this.escapeHtml(msg.email)}</a></td>
-                <td class="msg-query-cell">${this.escapeHtml(msg.query)}</td>
-                <td>
-                    <a href="mailto:${this.escapeHtml(msg.email)}" class="cyber-btn-xs" title="Reply via Email"><i class="fas fa-reply"></i></a>
-                </td>
-            </tr>
-        `).join('');
+
+        // Desktop Table Rows
+        if (tbody) {
+            tbody.innerHTML = messages.map(msg => `
+                <tr>
+                    <td>${new Date(msg.created_at).toLocaleString()}</td>
+                    <td><strong>${this.escapeHtml(msg.name)}</strong></td>
+                    <td><a href="mailto:${this.escapeHtml(msg.email)}?subject=Re: Inquiry on Akash Singh Portfolio" class="cyber-link">${this.escapeHtml(msg.email)}</a></td>
+                    <td class="msg-query-cell">${this.escapeHtml(msg.query)}</td>
+                    <td>
+                        <a href="mailto:${this.escapeHtml(msg.email)}" class="cyber-btn-xs" title="Reply via Email"><i class="fas fa-reply"></i></a>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Mobile Cyber Cards
+        if (cardsContainer) {
+            cardsContainer.innerHTML = messages.map(msg => `
+                <div class="inbox-card-item">
+                    <div class="inbox-card-header">
+                        <span class="inbox-card-name"><i class="fas fa-user-astronaut"></i> ${this.escapeHtml(msg.name)}</span>
+                        <span class="inbox-card-time">${new Date(msg.created_at).toLocaleDateString()} ${new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div class="inbox-card-email">
+                        <i class="fas fa-envelope"></i> <a href="mailto:${this.escapeHtml(msg.email)}?subject=Re: Inquiry on Akash Singh Portfolio" class="cyber-link">${this.escapeHtml(msg.email)}</a>
+                    </div>
+                    <div class="inbox-card-query">
+                        ${this.escapeHtml(msg.query)}
+                    </div>
+                    <div class="inbox-card-actions">
+                        <a href="mailto:${this.escapeHtml(msg.email)}" class="cyber-btn-xs">
+                            <i class="fas fa-reply"></i> REPLY VIA EMAIL
+                        </a>
+                    </div>
+                </div>
+            `).join('');
+        }
     }
 
     populateSettingsFields() {
