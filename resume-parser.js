@@ -251,10 +251,7 @@ class ResumeParser {
                 const school = schoolParts[0] ? schoolParts[0].trim() : '';
                 const date = schoolParts[1] ? schoolParts[1].trim() : '';
 
-                let badge = 'DEGREE';
-                if (date.includes('2025') || date.includes('2026') || date.toLowerCase().includes('present')) {
-                    badge = 'IN PROGRESS';
-                }
+                let badge = this.determineEducationBadge(degree, school, date);
 
                 currentEdu = {
                     badge: badge,
@@ -269,6 +266,78 @@ class ResumeParser {
         if (currentEdu) result.education.push(currentEdu);
 
         return result;
+    }
+
+    /**
+     * Dynamically determines whether an education entry is IN PROGRESS, DEGREE, or HIGH SCHOOL
+     * by comparing the month and year of completion against the current system date.
+     * Works dynamically across any year in the future.
+     */
+    determineEducationBadge(degree, school, dateStr) {
+        const textToScan = `${degree || ''} ${school || ''} ${dateStr || ''}`.toLowerCase();
+
+        // 1. High School check
+        if (/high\s*school|secondary|matric|10th|12th|intermediate|cbse|icse|state\s*board/i.test(textToScan)) {
+            return 'HIGH SCHOOL';
+        }
+
+        // 2. Explicit in-progress keywords
+        if (/present|current|now|pursuing|in\s*progress|expected/i.test(textToScan)) {
+            return 'IN PROGRESS';
+        }
+
+        if (!dateStr || !dateStr.trim()) {
+            return 'DEGREE';
+        }
+
+        // 3. Extract the end date segment from the date range
+        const dateRangeParts = dateStr.split(/[-—–to]+/).map(p => p.trim());
+        const endDateRaw = dateRangeParts[dateRangeParts.length - 1]; // e.g. "03/2026", "2018", "March 2026"
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-12
+
+        // Check for MM/YYYY pattern (e.g. "03/2026" or "3/2026")
+        const mmYyyyMatch = endDateRaw.match(/(\d{1,2})\/(\d{4})/);
+        if (mmYyyyMatch) {
+            const endMonth = parseInt(mmYyyyMatch[1], 10);
+            const endYear = parseInt(mmYyyyMatch[2], 10);
+
+            if (endYear > currentYear || (endYear === currentYear && endMonth > currentMonth)) {
+                return 'IN PROGRESS';
+            }
+            return 'DEGREE';
+        }
+
+        // Check for Month Name YYYY (e.g. "March 2026", "Mar 2026")
+        const monthNames = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        };
+        const monthNameMatch = endDateRaw.match(/([a-zA-Z]{3,9})\s*(\d{4})/);
+        if (monthNameMatch) {
+            const mPrefix = monthNameMatch[1].slice(0, 3).toLowerCase();
+            const endMonth = monthNames[mPrefix] || 12;
+            const endYear = parseInt(monthNameMatch[2], 10);
+
+            if (endYear > currentYear || (endYear === currentYear && endMonth > currentMonth)) {
+                return 'IN PROGRESS';
+            }
+            return 'DEGREE';
+        }
+
+        // Check for YYYY only (e.g. "2026")
+        const yearOnlyMatch = endDateRaw.match(/\b(\d{4})\b/);
+        if (yearOnlyMatch) {
+            const endYear = parseInt(yearOnlyMatch[1], 10);
+            if (endYear > currentYear) {
+                return 'IN PROGRESS';
+            }
+            return 'DEGREE';
+        }
+
+        return 'DEGREE';
     }
 
     /**
