@@ -260,6 +260,161 @@ class SupabaseService {
         }
     }
 
+    async updateContactMessage(id, updatedFields) {
+        if (!this.client || this.currentRole !== 'admin') {
+            // Local fallback update
+            const local = JSON.parse(localStorage.getItem('cyber_local_contact_inbox') || '[]');
+            const idx = local.findIndex(m => m.id === id);
+            if (idx !== -1) {
+                local[idx] = { ...local[idx], ...updatedFields };
+                localStorage.setItem('cyber_local_contact_inbox', JSON.stringify(local));
+            }
+            return true;
+        }
+
+        try {
+            const { data, error } = await this.client
+                .from('contact_messages')
+                .update(updatedFields)
+                .eq('id', id);
+
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error('[SupabaseService] Update message error:', err);
+            throw err;
+        }
+    }
+
+    async deleteContactMessage(id) {
+        // Step 1: Find message in contact_messages or local
+        let messageToArchive = null;
+
+        if (this.client && this.currentRole === 'admin') {
+            try {
+                const { data, error } = await this.client
+                    .from('contact_messages')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+                if (!error && data) {
+                    messageToArchive = data;
+                }
+            } catch (e) {}
+
+            if (messageToArchive) {
+                // Step 2: Insert into archived_messages table
+                try {
+                    await this.client
+                        .from('archived_messages')
+                        .upsert({
+                            id: messageToArchive.id,
+                            name: messageToArchive.name,
+                            email: messageToArchive.email,
+                            query: messageToArchive.query,
+                            status: 'archived',
+                            created_at: messageToArchive.created_at,
+                            archived_at: new Date().toISOString()
+                        });
+                } catch (err) {
+                    console.warn('[SupabaseService] Archiving record note:', err);
+                }
+
+                // Step 3: Delete from active contact_messages
+                const { error: delErr } = await this.client
+                    .from('contact_messages')
+                    .delete()
+                    .eq('id', id);
+
+                if (delErr) throw delErr;
+
+                // Step 4: Trigger 30-day purge procedure
+                try {
+                    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                    await this.client
+                        .from('archived_messages')
+                        .delete()
+                        .lt('archived_at', thirtyDaysAgo);
+                } catch (purgeErr) {
+                    console.warn('[SupabaseService] 30-day auto-purge cleanup note:', purgeErr);
+                }
+            }
+        }
+
+        // Also clean up from local cache
+        try {
+            const local = JSON.parse(localStorage.getItem('cyber_local_contact_inbox') || '[]');
+            const filtered = local.filter(m => m.id !== id);
+            localStorage.setItem('cyber_local_contact_inbox', JSON.stringify(filtered));
+        } catch (e) {}
+
+        return true;
+    }
+
+    async fetchArchivedMessagesCount() {
+        if (!this.client || this.currentRole !== 'admin') return 0;
+        try {
+            const { count, error } = await this.client
+                .from('archived_messages')
+                .select('*', { count: 'exact', head: true });
+            if (error) return 0;
+            return count || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    // --- User & Clearance Management API ---
+    async fetchUsers() {
+        if (!this.client || this.currentRole !== 'admin') {
+            // Local fallback simulation
+            const fallbackUser = this.currentUser ? [{
+                id: this.currentUser.id,
+                email: this.currentUser.email,
+                role: this.currentRole,
+                created_at: new Date().toISOString()
+            }] : [];
+            return fallbackUser;
+        }
+
+        try {
+            const { data, error } = await this.client
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            return data || [];
+        } catch (err) {
+            console.warn('[SupabaseService] Fetch users error, returning current user session fallback:', err);
+            return this.currentUser ? [{
+                id: this.currentUser.id,
+                email: this.currentUser.email,
+                role: this.currentRole,
+                created_at: new Date().toISOString()
+            }] : [];
+        }
+    }
+
+    async updateUserRole(userId, newRole) {
+        if (!this.client || this.currentRole !== 'admin') {
+            throw new Error('Unauthorized: Only an Admin can modify user clearance.');
+        }
+
+        try {
+            const { data, error } = await this.client
+                .from('profiles')
+                .update({ role: newRole })
+                .eq('id', userId);
+
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error('[SupabaseService] Update user role error:', err);
+            throw err;
+        }
+    }
+
     async updateRecipientEmail(newEmail) {
         this.recipientEmail = (newEmail || '').trim();
         localStorage.setItem(this.STORAGE_RECIPIENT_EMAIL, this.recipientEmail);
@@ -280,3 +435,4 @@ class SupabaseService {
 
 // Global Singleton
 window.cyberSupabase = new SupabaseService();
+

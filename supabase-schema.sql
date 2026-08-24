@@ -108,7 +108,7 @@ create policy "Allow admin to read contact messages"
     )
   );
 
--- Only admins can update status of contact messages (mark as read/unread)
+-- Only admins can update contact messages (edit name, email, query, status)
 create policy "Allow admin to update contact messages"
   on public.contact_messages for update
   using (
@@ -118,7 +118,50 @@ create policy "Allow admin to update contact messages"
     )
   );
 
--- 5. INITIALIZE DEFAULT CONTENT RECORD (If not present)
+-- Only admins can delete contact messages
+create policy "Allow admin to delete contact messages"
+  on public.contact_messages for delete
+  using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+-- 5. ARCHIVED MESSAGES TABLE (Retains Deleted Messages for 30 Days)
+create table if not exists public.archived_messages (
+  id uuid primary key,
+  name text not null,
+  email text not null,
+  query text not null,
+  status text default 'archived',
+  created_at timestamp with time zone not null,
+  archived_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS on archived_messages
+alter table public.archived_messages enable row level security;
+
+-- Only admins can access or manage archived messages
+create policy "Allow admin full access to archived messages"
+  on public.archived_messages for all
+  using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+-- Auto-purge procedure for messages older than 30 days
+create or replace function public.purge_old_archived_messages()
+returns void as $$
+begin
+  delete from public.archived_messages
+  where archived_at < (now() - interval '30 days');
+end;
+$$ language plpgsql security definer;
+
+-- 6. INITIALIZE DEFAULT CONTENT RECORD (If not present)
 insert into public.site_content (id, content, recipient_email)
 values (
   'primary_resume',
