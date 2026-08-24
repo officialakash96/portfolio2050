@@ -1,8 +1,7 @@
 /**
- * Cyber-Resume AI & Heuristic Resume Parser
- * Extracts text from uploaded PDF resumes using PDF.js
- * and intelligently extracts structured sections (Hero, Summary, Work History, Education, Skills)
- * for instant one-click synchronization to the live website.
+ * Cyber-Resume Exact AI & Document Resume Parser
+ * Faithfully extracts verbatim text from uploaded PDF resumes without hallucinating,
+ * inventing, or injecting pre-written sample content.
  */
 
 class ResumeParser {
@@ -11,7 +10,7 @@ class ResumeParser {
     }
 
     /**
-     * Reads and extracts all text content from a PDF File object
+     * Reads and extracts text content from a PDF File preserving line breaks
      * @param {File} file 
      * @returns {Promise<string>}
      */
@@ -28,216 +27,278 @@ class ResumeParser {
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(' ');
-            fullText += pageText + '\n';
+            
+            let lastY = null;
+            let pageLines = [];
+            let currentLine = '';
+
+            for (const item of textContent.items) {
+                const y = item.transform ? Math.round(item.transform[5]) : null;
+                
+                if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
+                    if (currentLine.trim()) {
+                        pageLines.push(currentLine.trim());
+                    }
+                    currentLine = '';
+                }
+
+                currentLine += (currentLine ? ' ' : '') + item.str;
+                lastY = y;
+            }
+
+            if (currentLine.trim()) {
+                pageLines.push(currentLine.trim());
+            }
+
+            fullText += pageLines.join('\n') + '\n\n';
         }
 
-        return fullText;
+        return fullText.trim();
     }
 
     /**
      * Parses raw extracted resume text into structured site format
-     * Uses Gemini Flash if API Key is available, otherwise uses smart heuristic regex parser.
+     * Uses Gemini Flash if API Key is available, otherwise uses smart dynamic heuristic parser.
      * @param {string} rawText 
      * @returns {Promise<Object>}
      */
     async parseResumeText(rawText) {
+        if (!rawText || rawText.trim().length === 0) {
+            throw new Error('No readable text could be extracted from the uploaded PDF.');
+        }
+
         if (this.geminiApiKey && this.geminiApiKey.length > 20) {
             try {
                 return await this.parseWithGeminiAI(rawText);
             } catch (err) {
-                console.warn('[ResumeParser] Gemini API parsing failed, falling back to heuristic engine:', err);
+                console.warn('[ResumeParser] Gemini API parsing failed, falling back to dynamic parser:', err);
             }
         }
         return this.parseWithHeuristics(rawText);
     }
 
     /**
-     * Smart heuristic resume text analyzer
+     * Pure dynamic heuristic parser - extracts ONLY what is found in the resume.
+     * Does NOT inject hardcoded or synthetic fallback text.
      * @param {string} text 
      * @returns {Object}
      */
     parseWithHeuristics(text) {
-        const cleanText = text.replace(/\r/g, '').trim();
-        const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-        const structured = {
+        const result = {
             hero: {
-                name: 'AKASH SINGH',
-                role: 'Technical Solutions Consultant | 8+ Years Experience',
-                location: 'Bengaluru, Karnataka',
-                github: 'https://github.com/officialakash96/',
-                linkedin: 'https://www.linkedin.com/in/akashsinghjsr/',
+                name: '',
+                role: '',
+                location: '',
+                github: '',
+                linkedin: '',
                 resumeUrl: 'static/Resume_AkashSingh.pdf'
             },
             summary: [],
             experience: [],
             education: [],
             skills: {
-                programming: ['Python', 'JavaScript', 'C#', 'Java', 'PowerShell', 'HTML5', 'CSS3', 'SQL'],
-                databases: ['MS SQL Server', 'KQL', 'SQLite', 'Relational Schemas', 'Data Extraction'],
-                tools: ['Splunk', 'Power BI', 'Dynamics 365 CRM', 'Postman', 'Git', 'GitHub', 'AWS S3', 'AppDynamics', 'IIS', 'ASP.NET', 'RESTful APIs', 'Microservices', 'HAR Analysis', 'JIRA']
+                programming: [],
+                databases: [],
+                tools: []
             }
         };
 
-        // 1. Extract Candidate Name & Title from first lines if present
-        if (lines.length > 0) {
-            const firstLine = lines[0];
-            if (firstLine.length < 50 && !firstLine.toLowerCase().includes('resume') && !firstLine.toLowerCase().includes('curriculum')) {
-                structured.hero.name = firstLine.toUpperCase();
-            }
+        // 1. Extract Name & Role from header lines
+        if (rawLines.length > 0) {
+            result.hero.name = rawLines[0].replace(/[^a-zA-Z\s\.\-]/g, '').trim().toUpperCase();
+        }
+        if (rawLines.length > 1 && !rawLines[1].includes('@') && !rawLines[1].includes('http') && rawLines[1].length < 80) {
+            result.hero.role = rawLines[1];
         }
 
-        // 2. Extract Links and Location
-        const linkedinMatch = text.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_-]+/i);
-        if (linkedinMatch) structured.hero.linkedin = linkedinMatch[0];
+        // 2. Extract Social Links & Location
+        const linkedinMatch = text.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_\-\/]+/i);
+        if (linkedinMatch) result.hero.linkedin = linkedinMatch[0];
 
-        const githubMatch = text.match(/https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+/i);
-        if (githubMatch) structured.hero.github = githubMatch[0];
+        const githubMatch = text.match(/https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_\-\/]+/i);
+        if (githubMatch) result.hero.github = githubMatch[0];
 
-        const locationMatch = text.match(/(Bengaluru|Bangalore|Karnataka|Delhi|Mumbai|Hyderabad|Pune|San Francisco|London|Remote|India)[^,\n\.\;]*/i);
-        if (locationMatch) {
-            structured.hero.location = locationMatch[0].trim();
+        const locationMatch = text.match(/(?:Location|Address|City)?[:\s\-]*([A-Za-z\s]+,\s*[A-Za-z\s]+(?:\s*[0-9]{5,6})?)/);
+        if (locationMatch && locationMatch[1] && locationMatch[1].length < 50) {
+            result.hero.location = locationMatch[1].trim();
         }
 
-        // 3. Extract Summary
-        const summaryMatch = text.match(/(?:summary|profile|about me|professional summary)[\s\S]*?(?=(?:experience|work history|employment|skills|education|academic))/i);
-        if (summaryMatch) {
-            const summaryBlock = summaryMatch[0];
-            const bullets = summaryBlock
-                .split(/(?:•|\*|\-|\n)/)
-                .map(b => b.trim())
-                .filter(b => b.length > 30 && !b.toLowerCase().includes('summary') && !b.toLowerCase().includes('profile'));
-            if (bullets.length > 0) {
-                structured.summary = bullets.slice(0, 6);
-            }
-        }
-
-        if (structured.summary.length === 0) {
-            structured.summary = [
-                "Enterprise API Integrations, Technical Troubleshooting, SRE, and Systems Automation.",
-                "Root Cause Analysis (RCA) for mission-critical issues under strict SLAs; deep log and payload tracing.",
-                "Advancing Data Science & Machine Learning specialization via IIT Guwahati (E&ICT Academy).",
-                "Cross-functional technical alignment, incident management, and generative AI workflow integration."
-            ];
-        }
-
-        // 4. Extract Work Experience
-        const expMatch = text.match(/(?:work history|professional experience|experience|employment history)[\s\S]*?(?=(?:education|academic|skills|certifications|projects|$))/i);
-        if (expMatch) {
-            const expBlock = expMatch[0];
-            
-            // Look for known companies or date patterns
-            const companies = ['LinkedIn', 'Mphasis', 'Microsoft', 'Amazon', 'Google', 'Infosys', 'TCS', 'Wipro', 'Accenture', 'Cognizant'];
-            let foundItems = [];
-
-            companies.forEach(company => {
-                const idx = expBlock.toLowerCase().indexOf(company.toLowerCase());
-                if (idx !== -1) {
-                    const snippet = expBlock.slice(idx, idx + 800);
-                    const bullets = snippet
-                        .split(/(?:•|\*|\-|\n)/)
-                        .map(s => s.trim())
-                        .filter(s => s.length > 35 && !s.toLowerCase().includes(company.toLowerCase()));
-
-                    let role = company === 'LinkedIn' ? 'Integrations Consultant / Technical Consultant' : 'Software Engineer (Team Lead)';
-                    let date = company === 'LinkedIn' ? 'Dec 2021 - Present' : 'May 2018 - Nov 2021';
-
-                    foundItems.push({
-                        company: company,
-                        role: role,
-                        date: date,
-                        bullets: bullets.slice(0, 6)
-                    });
-                }
-            });
-
-            if (foundItems.length > 0) {
-                structured.experience = foundItems;
-            }
-        }
-
-        // Default experience fallback if empty
-        if (structured.experience.length === 0) {
-            structured.experience = [
-                {
-                    company: "LinkedIn",
-                    role: "Integrations Consultant / Technical Consultant",
-                    date: "Dec 2021 - Present",
-                    bullets: [
-                        "Consulted with global enterprise clients to scope and execute technical integration of new job posting sources (ATS) via XML/JSON Feeds, REST API endpoints, and HTML scraping.",
-                        "Provided Tier 2 technical support for LinkedIn Talent Solutions product suite, diagnosing complex distributed integration failures.",
-                        "Investigated API connectivity faults by inspecting network logs (HAR), analyzing JSON/XML payload structures, and validating endpoints in Postman.",
-                        "Pioneered generative AI tooling and automated prompt workflows to accelerate daily diagnostic and reporting cycles."
-                    ]
-                },
-                {
-                    company: "Mphasis",
-                    role: "Software Engineer (Team Lead)",
-                    date: "May 2018 - Nov 2021",
-                    bullets: [
-                        "Enhanced critical application stability, improving system uptime by 20% and slashing MTTR by establishing SRE-focused observability dashboards.",
-                        "Resolved complex L3 production outages by performing deep-dive source code debugging in Java, C#, and SQL Server.",
-                        "Engineered PowerShell ISE-HTML automated diagnostic scripts, eliminating manual database monitoring workflows."
-                    ]
-                }
-            ];
-        }
-
-        // 5. Extract Education
-        structured.education = [
-            {
-                badge: "IN PROGRESS",
-                degree: "Credit Linked Course in Data Science",
-                school: "Daksh Gurukul & E&ICT Academy, IIT Guwahati-Masai",
-                date: "Jan 2025 - Present"
-            },
-            {
-                badge: "DEGREE",
-                degree: "B.Tech, Information Technology",
-                school: "KIIT University",
-                date: "2014 - 2018 | CGPA: 7.2"
-            },
-            {
-                badge: "HIGH SCHOOL",
-                degree: "High School (Maths + Science)",
-                school: "Delhi Public School",
-                date: "2012 - 2014 | 74%"
-            }
+        // 3. Section Segmentation based on common section titles
+        const sectionHeaders = [
+            { key: 'summary', regex: /^(?:professional\s+summary|summary|profile|about\s+me|career\s+objective)\b/i },
+            { key: 'experience', regex: /^(?:work\s+experience|professional\s+experience|experience|employment\s+history|work\s+history)\b/i },
+            { key: 'education', regex: /^(?:academic\s+records|education|qualifications|academic\s+history|degrees)\b/i },
+            { key: 'skills', regex: /^(?:technical\s+skills|skills|core\s+competencies|skill\s+set|technologies)\b/i }
         ];
 
-        return structured;
+        let currentSection = null;
+        const sectionsData = {
+            summary: [],
+            experience: [],
+            education: [],
+            skills: []
+        };
+
+        for (const line of rawLines) {
+            let matchedHeader = null;
+            for (const h of sectionHeaders) {
+                if (h.regex.test(line)) {
+                    matchedHeader = h.key;
+                    break;
+                }
+            }
+
+            if (matchedHeader) {
+                currentSection = matchedHeader;
+                continue;
+            }
+
+            if (currentSection && sectionsData[currentSection]) {
+                sectionsData[currentSection].push(line);
+            }
+        }
+
+        // 4. Parse Summary Section Lines
+        if (sectionsData.summary.length > 0) {
+            result.summary = sectionsData.summary
+                .map(l => l.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim())
+                .filter(l => l.length > 10);
+        }
+
+        // 5. Parse Experience Section Lines
+        if (sectionsData.experience.length > 0) {
+            let currentJob = null;
+            const dateRegex = /(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*\d{4}|\d{4})\s*(?:-|–|—|to)\s*(?:present|current|now|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*\d{4}|\d{4})/i;
+
+            for (const line of sectionsData.experience) {
+                const isDateLine = dateRegex.test(line);
+                const isBullet = /^[\s•\*\-\–\—\>]/.test(line);
+
+                if (isDateLine || (!isBullet && line.length < 70 && !currentJob)) {
+                    if (currentJob && (currentJob.company || currentJob.role)) {
+                        result.experience.push(currentJob);
+                    }
+                    
+                    const dateMatch = line.match(dateRegex);
+                    const dateStr = dateMatch ? dateMatch[0] : '';
+                    const titlePart = line.replace(dateRegex, '').replace(/[|•–—]/g, ' ').trim();
+
+                    currentJob = {
+                        company: titlePart || 'Organization',
+                        role: titlePart || '',
+                        date: dateStr,
+                        bullets: []
+                    };
+                } else if (currentJob) {
+                    const cleanBullet = line.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim();
+                    if (cleanBullet.length > 5) {
+                        currentJob.bullets.push(cleanBullet);
+                    }
+                }
+            }
+
+            if (currentJob && (currentJob.company || currentJob.role)) {
+                result.experience.push(currentJob);
+            }
+        }
+
+        // 6. Parse Education Section Lines
+        if (sectionsData.education.length > 0) {
+            let currentEdu = null;
+            const eduDateRegex = /(?:\b\d{4}\s*(?:-|–|—|to)\s*(?:\d{4}|present)\b|\b\d{4}\b)/i;
+
+            for (const line of sectionsData.education) {
+                const dateMatch = line.match(eduDateRegex);
+                const isBullet = /^[\s•\*\-\–\—\>]/.test(line);
+
+                if (!isBullet && line.length > 3) {
+                    if (currentEdu) {
+                        result.education.push(currentEdu);
+                    }
+
+                    let badge = 'DEGREE';
+                    if (/progress|pursuing|current/i.test(line)) badge = 'IN PROGRESS';
+                    if (/school|matric|intermediate|higher secondary/i.test(line)) badge = 'HIGH SCHOOL';
+
+                    currentEdu = {
+                        badge: badge,
+                        degree: line.replace(eduDateRegex, '').replace(/[|•–—]/g, ' ').trim(),
+                        school: '',
+                        date: dateMatch ? dateMatch[0] : ''
+                    };
+                } else if (currentEdu && !currentEdu.school) {
+                    currentEdu.school = line.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim();
+                }
+            }
+            if (currentEdu) {
+                result.education.push(currentEdu);
+            }
+        }
+
+        // 7. Parse Skills Section Lines
+        if (sectionsData.skills.length > 0) {
+            const allSkillTokens = sectionsData.skills
+                .join(',')
+                .split(/[,|•\n\/;]/)
+                .map(s => s.replace(/^(?:languages|databases|tools|frameworks|technologies|libraries|skills)[:\s\-]*/i, '').trim())
+                .filter(s => s.length > 1 && s.length < 35);
+
+            const uniqueSkills = Array.from(new Set(allSkillTokens));
+
+            // Classify extracted skills dynamically
+            result.skills.programming = uniqueSkills.slice(0, Math.ceil(uniqueSkills.length / 3));
+            result.skills.databases = uniqueSkills.slice(Math.ceil(uniqueSkills.length / 3), Math.ceil(uniqueSkills.length * 2 / 3));
+            result.skills.tools = uniqueSkills.slice(Math.ceil(uniqueSkills.length * 2 / 3));
+        }
+
+        return result;
     }
 
     /**
      * Deep semantic parsing using Gemini Flash API
+     * Enforces STRICT verbatim extraction with zero hallucination.
      */
     async parseWithGeminiAI(rawText) {
-        const prompt = `You are a resume parsing engine. Parse the following resume text into a strict JSON object with this exact schema:
+        const prompt = `You are a strict, faithful resume text extraction system. Extract ONLY the EXACT verbatim content and details present in the provided resume text.
+
+CRITICAL RULES:
+1. DO NOT invent, hallucinate, embellish, rewrite, summarize, or substitute any text.
+2. Every sentence, achievement, job title, company name, degree, and skill MUST come directly and verbatim from the resume text provided.
+3. If a field or section is not in the resume, return an empty string "" or empty array [].
+4. Output strict JSON matching this exact schema:
+
 {
   "hero": {
-    "name": "Full Name in uppercase",
-    "role": "Current Title and Experience",
-    "location": "City, State or Country",
-    "github": "URL or empty string",
-    "linkedin": "URL or empty string",
+    "name": "Candidate full name in uppercase as written in resume",
+    "role": "Job title or headline as written in resume",
+    "location": "City, State or Country found in resume, or empty string",
+    "github": "Exact GitHub profile URL if in resume, or empty string",
+    "linkedin": "Exact LinkedIn profile URL if in resume, or empty string",
     "resumeUrl": "static/Resume_AkashSingh.pdf"
   },
-  "summary": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4"],
+  "summary": [
+    "Exact verbatim bullet point 1 from summary/profile",
+    "Exact verbatim bullet point 2 from summary/profile"
+  ],
   "experience": [
     {
-      "company": "Company Name",
-      "role": "Job Title",
-      "date": "Start - End Date",
-      "bullets": ["Achievement 1", "Achievement 2", "Achievement 3"]
+      "company": "Exact Company Name from resume",
+      "role": "Exact Job Title from resume",
+      "date": "Exact Date Range from resume",
+      "bullets": [
+        "Exact verbatim bullet point from this experience entry",
+        "Exact verbatim bullet point from this experience entry"
+      ]
     }
   ],
   "education": [
     {
-      "badge": "DEGREE | IN PROGRESS | HIGH SCHOOL",
-      "degree": "Degree Name",
-      "school": "Institution / University",
-      "date": "Years | Grade"
+      "badge": "DEGREE or IN PROGRESS or HIGH SCHOOL",
+      "degree": "Exact degree or course name from resume",
+      "school": "Exact institution name from resume",
+      "date": "Exact years or dates from resume"
     }
   ],
   "skills": {
@@ -247,27 +308,27 @@ class ResumeParser {
   }
 }
 
-Return ONLY valid raw JSON with NO markdown blocks, NO backticks, and NO conversational text.
+Return ONLY valid JSON.
 
-Resume Content:
-${rawText.slice(0, 10000)}`;
+Resume Content to parse:
+${rawText.slice(0, 15000)}`;
 
         const payload = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
                 responseMimeType: "application/json",
-                temperature: 0.1
+                temperature: 0.0
             }
         };
 
-        // Try gemini-1.5-flash (Google AI Studio free tier model)
+        // 1. Try gemini-1.5-flash
         let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        // If 1.5-flash has an issue, try gemini-2.0-flash
+        // 2. Fallback to gemini-2.0-flash
         if (!response.ok) {
             response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.geminiApiKey}`, {
                 method: 'POST',

@@ -309,7 +309,7 @@ class AdminPortal {
                 <div class="form-row-2">
                     <div class="admin-input-group">
                         <label>Candidate Name</label>
-                        <input type="text" id="edit-hero-name" value="${data.hero?.name || 'AKASH SINGH'}">
+                        <input type="text" id="edit-hero-name" value="${data.hero?.name || ''}">
                     </div>
                     <div class="admin-input-group">
                         <label>Role / Title</label>
@@ -319,7 +319,7 @@ class AdminPortal {
                 <div class="form-row-3">
                     <div class="admin-input-group">
                         <label>Location</label>
-                        <input type="text" id="edit-hero-loc" value="${data.hero?.location || 'Bengaluru, Karnataka'}">
+                        <input type="text" id="edit-hero-loc" value="${data.hero?.location || ''}">
                     </div>
                     <div class="admin-input-group">
                         <label>LinkedIn URL</label>
