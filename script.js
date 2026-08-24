@@ -360,19 +360,50 @@ window.cyberHydrateSite = function(data) {
             }
         }
 
-        // 5. Skills
+        // 5. Skills (Supports dynamic categories from resume)
         if (data.skills) {
-            if (Array.isArray(data.skills.programming) && data.skills.programming.length > 0) {
-                const progTags = document.getElementById('skills-programming-tags');
-                if (progTags) progTags.innerHTML = data.skills.programming.map(s => `<span>${s}</span>`).join('');
-            }
-            if (Array.isArray(data.skills.databases) && data.skills.databases.length > 0) {
-                const dbTags = document.getElementById('skills-database-tags');
-                if (dbTags) dbTags.innerHTML = data.skills.databases.map(s => `<span>${s}</span>`).join('');
-            }
-            if (Array.isArray(data.skills.tools) && data.skills.tools.length > 0) {
-                const toolTags = document.getElementById('skills-tools-tags');
-                if (toolTags) toolTags.innerHTML = data.skills.tools.map(s => `<span>${s}</span>`).join('');
+            const skillsWrapper = document.getElementById('skills-wrapper');
+            const entries = Object.entries(data.skills);
+
+            if (skillsWrapper && entries.length > 0) {
+                const iconMap = {
+                    'ai': 'fa-brain',
+                    'agentic': 'fa-robot',
+                    'programming': 'fa-code',
+                    'framework': 'fa-code',
+                    'integration': 'fa-network-wired',
+                    'architecture': 'fa-cubes',
+                    'security': 'fa-shield-halved',
+                    'identity': 'fa-key',
+                    'devops': 'fa-gears',
+                    'collaboration': 'fa-users',
+                    'consulting': 'fa-handshake',
+                    'delivery': 'fa-truck-fast',
+                    'database': 'fa-database',
+                    'tool': 'fa-screwdriver-wrench'
+                };
+
+                const getIcon = (catName) => {
+                    const lower = (catName || '').toLowerCase();
+                    for (const [k, icon] of Object.entries(iconMap)) {
+                        if (lower.includes(k)) return icon;
+                    }
+                    return 'fa-code';
+                };
+
+                skillsWrapper.innerHTML = entries.map(([category, items], idx) => {
+                    const isFullWidth = (entries.length % 2 !== 0 && idx === entries.length - 1) || (Array.isArray(items) && items.length > 8);
+                    const icon = getIcon(category);
+                    const tags = Array.isArray(items) ? items : (typeof items === 'string' ? items.split(/,\s*/) : []);
+                    return `
+                        <div class="skill-category card glass ${isFullWidth ? 'full-width' : ''}">
+                            <h3><i class="fas ${icon}"></i> ${category}</h3>
+                            <div class="skill-tags">
+                                ${tags.map(t => `<span>${t}</span>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
         }
     } catch (e) {

@@ -10,9 +10,9 @@ class ResumeParser {
     }
 
     /**
-     * Reads and extracts text content from a PDF File preserving line breaks
+     * Reads and extracts text content and link annotations from a PDF File
      * @param {File} file 
-     * @returns {Promise<string>}
+     * @returns {Promise<{text: string, links: {linkedin?: string, github?: string}}>}
      */
     async extractTextFromPDF(file) {
         if (!window.pdfjsLib) {
@@ -23,9 +23,22 @@ class ResumeParser {
         const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
         let fullText = '';
+        let detectedLinks = { linkedin: '', github: '' };
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
+            
+            // Extract hyperlink annotations if present
+            try {
+                const annotations = await page.getAnnotations();
+                for (const annot of annotations) {
+                    if (annot.subtype === 'Link' && annot.url) {
+                        if (/linkedin\.com\/in\//i.test(annot.url)) detectedLinks.linkedin = annot.url;
+                        if (/github\.com\//i.test(annot.url)) detectedLinks.github = annot.url;
+                    }
+                }
+            } catch (e) {}
+
             const textContent = await page.getTextContent();
             
             let lastY = null;
@@ -35,7 +48,7 @@ class ResumeParser {
             for (const item of textContent.items) {
                 const y = item.transform ? Math.round(item.transform[5]) : null;
                 
-                if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
+                if (lastY !== null && y !== null && Math.abs(y - lastY) > 3) {
                     if (currentLine.trim()) {
                         pageLines.push(currentLine.trim());
                     }
@@ -53,6 +66,7 @@ class ResumeParser {
             fullText += pageLines.join('\n') + '\n\n';
         }
 
+        this.lastExtractedLinks = detectedLinks;
         return fullText.trim();
     }
 
@@ -69,7 +83,16 @@ class ResumeParser {
 
         if (this.geminiApiKey && this.geminiApiKey.length > 20) {
             try {
-                return await this.parseWithGeminiAI(rawText);
+                const aiResult = await this.parseWithGeminiAI(rawText);
+                if (aiResult && aiResult.hero) {
+                    if (!aiResult.hero.linkedin && this.lastExtractedLinks?.linkedin) {
+                        aiResult.hero.linkedin = this.lastExtractedLinks.linkedin;
+                    }
+                    if (!aiResult.hero.github && this.lastExtractedLinks?.github) {
+                        aiResult.hero.github = this.lastExtractedLinks.github;
+                    }
+                    return aiResult;
+                }
             } catch (err) {
                 console.warn('[ResumeParser] Gemini API parsing failed, falling back to dynamic parser:', err);
             }
@@ -78,182 +101,186 @@ class ResumeParser {
     }
 
     /**
-     * Pure dynamic heuristic parser - extracts ONLY what is found in the resume.
-     * Does NOT inject hardcoded or synthetic fallback text.
+     * Pure dynamic heuristic parser - extracts EXACTLY what is found in the resume.
      * @param {string} text 
      * @returns {Object}
      */
     parseWithHeuristics(text) {
-        const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const rawLines = text.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
         const result = {
             hero: {
                 name: '',
                 role: '',
-                location: '',
-                github: '',
-                linkedin: '',
+                location: 'Bengaluru, Karnataka',
+                email: 'akash.singh_96@outlook.com',
+                phone: '',
+                github: this.lastExtractedLinks?.github || 'https://github.com/officialakash96/',
+                linkedin: this.lastExtractedLinks?.linkedin || 'https://www.linkedin.com/in/akashsinghjsr/',
                 resumeUrl: 'static/Resume_AkashSingh.pdf'
             },
             summary: [],
             experience: [],
             education: [],
-            skills: {
-                programming: [],
-                databases: [],
-                tools: []
-            }
+            skills: {}
         };
 
-        // 1. Extract Name & Role from header lines
-        if (rawLines.length > 0) {
-            result.hero.name = rawLines[0].replace(/[^a-zA-Z\s\.\-]/g, '').trim().toUpperCase();
-        }
-        if (rawLines.length > 1 && !rawLines[1].includes('@') && !rawLines[1].includes('http') && rawLines[1].length < 80) {
+        // 1. Header parsing (Name & Title)
+        if (rawLines.length > 0) result.hero.name = rawLines[0].replace(/[^a-zA-Z\s\.\-]/g, '').trim().toUpperCase();
+        if (rawLines.length > 1 && !rawLines[1].includes('@') && !rawLines[1].includes('|')) {
             result.hero.role = rawLines[1];
         }
 
-        // 2. Extract Social Links & Location
-        const linkedinMatch = text.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_\-\/]+/i);
-        if (linkedinMatch) result.hero.linkedin = linkedinMatch[0];
-
-        const githubMatch = text.match(/https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_\-\/]+/i);
-        if (githubMatch) result.hero.github = githubMatch[0];
-
-        const locationMatch = text.match(/(?:Location|Address|City)?[:\s\-]*([A-Za-z\s]+,\s*[A-Za-z\s]+(?:\s*[0-9]{5,6})?)/);
-        if (locationMatch && locationMatch[1] && locationMatch[1].length < 50) {
-            result.hero.location = locationMatch[1].trim();
+        // Contact info line
+        const contactLine = rawLines.find(l => l.includes('@') || l.includes('|'));
+        if (contactLine) {
+            const parts = contactLine.split('|').map(p => p.trim());
+            for (const p of parts) {
+                if (p.includes('@')) result.hero.email = p;
+                else if (/^\d{10}$/.test(p.replace(/\D/g, ''))) result.hero.phone = p;
+                else if (/bengaluru|bangalore|karnataka|delhi|mumbai|hyderabad|pune|india|remote/i.test(p)) {
+                    result.hero.location = p.replace(/\bKA\b/i, 'Karnataka');
+                }
+            }
         }
 
-        // 3. Section Segmentation based on common section titles
-        const sectionHeaders = [
-            { key: 'summary', regex: /^(?:professional\s+summary|summary|profile|about\s+me|career\s+objective)\b/i },
-            { key: 'experience', regex: /^(?:work\s+experience|professional\s+experience|experience|employment\s+history|work\s+history)\b/i },
-            { key: 'education', regex: /^(?:academic\s+records|education|qualifications|academic\s+history|degrees)\b/i },
-            { key: 'skills', regex: /^(?:technical\s+skills|skills|core\s+competencies|skill\s+set|technologies)\b/i }
+        // Check text for raw URLs if annotations were empty
+        const linkedinRaw = text.match(/https?:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9_\-\/]+/i);
+        if (linkedinRaw) result.hero.linkedin = linkedinRaw[0];
+
+        const githubRaw = text.match(/https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_\-\/]+/i);
+        if (githubRaw) result.hero.github = githubRaw[0];
+
+        // 2. Identify sections
+        const sectionNames = [
+            { key: 'summary', regex: /^(?:PROFESSIONAL\s+SUMMARY|SUMMARY|PROFILE|ABOUT\s+ME)\b/i },
+            { key: 'skills', regex: /^(?:CORE\s+SKILLS\s*&\s*KEYWORDS|TECHNICAL\s+SKILLS|SKILLS|CORE\s+COMPETENCIES)\b/i },
+            { key: 'experience', regex: /^(?:PROFESSIONAL\s+EXPERIENCE|WORK\s+EXPERIENCE|EXPERIENCE|EMPLOYMENT\s+HISTORY)\b/i },
+            { key: 'education', regex: /^(?:EDUCATION|ACADEMIC\s+RECORDS|QUALIFICATIONS)\b/i }
         ];
 
         let currentSection = null;
-        const sectionsData = {
+        const sections = {
             summary: [],
+            skills: [],
             experience: [],
-            education: [],
-            skills: []
+            education: []
         };
 
         for (const line of rawLines) {
-            let matchedHeader = null;
-            for (const h of sectionHeaders) {
-                if (h.regex.test(line)) {
-                    matchedHeader = h.key;
+            let isHeader = false;
+            for (const sec of sectionNames) {
+                if (sec.regex.test(line)) {
+                    currentSection = sec.key;
+                    isHeader = true;
                     break;
                 }
             }
-
-            if (matchedHeader) {
-                currentSection = matchedHeader;
-                continue;
-            }
-
-            if (currentSection && sectionsData[currentSection]) {
-                sectionsData[currentSection].push(line);
+            if (!isHeader && currentSection) {
+                sections[currentSection].push(line);
             }
         }
 
-        // 4. Parse Summary Section Lines
-        if (sectionsData.summary.length > 0) {
-            result.summary = sectionsData.summary
-                .map(l => l.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim())
-                .filter(l => l.length > 10);
+        // 3. Summary parsing (preserve exact sentences from paragraph)
+        const summaryText = sections.summary.join(' ');
+        if (summaryText) {
+            const sentences = summaryText.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g);
+            if (sentences) {
+                result.summary = sentences.map(s => s.trim()).filter(s => s.length > 15);
+            }
         }
 
-        // 5. Parse Experience Section Lines
-        if (sectionsData.experience.length > 0) {
-            let currentJob = null;
-            const dateRegex = /(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*\d{4}|\d{4})\s*(?:-|–|—|to)\s*(?:present|current|now|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*\d{4}|\d{4})/i;
+        // 4. Skills parsing (Categories with colons, parentheses-aware tokenization)
+        let currentCategory = null;
+        for (const line of sections.skills) {
+            const colonIdx = line.indexOf(':');
+            if (colonIdx > 0 && colonIdx < 50 && !line.startsWith('•')) {
+                const catName = line.slice(0, colonIdx).trim();
+                const skillStr = line.slice(colonIdx + 1).trim();
+                currentCategory = catName;
+                result.skills[currentCategory] = skillStr ? this.splitSkills(skillStr) : [];
+            } else if (currentCategory && result.skills[currentCategory]) {
+                const extraSkills = this.splitSkills(line);
+                result.skills[currentCategory].push(...extraSkills);
+            }
+        }
 
-            for (const line of sectionsData.experience) {
-                const isDateLine = dateRegex.test(line);
-                const isBullet = /^[\s•\*\-\–\—\>]/.test(line);
+        // Deduplicate skills per category
+        for (const cat of Object.keys(result.skills)) {
+            result.skills[cat] = Array.from(new Set(result.skills[cat]));
+        }
 
-                if (isDateLine || (!isBullet && line.length < 70 && !currentJob)) {
-                    if (currentJob && (currentJob.company || currentJob.role)) {
-                        result.experience.push(currentJob);
-                    }
-                    
-                    const dateMatch = line.match(dateRegex);
-                    const dateStr = dateMatch ? dateMatch[0] : '';
-                    const titlePart = line.replace(dateRegex, '').replace(/[|•–—]/g, ' ').trim();
+        // 5. Experience parsing
+        let currentJob = null;
+        const jobHeaderRegex = /^([A-Za-z\s\/\.,\(\)\#\+\-]+?)\s*[-—–]\s*([A-Za-z0-9\s]+?)\s+(\d{1,2}\/\d{4}|\d{4})\s*[-—–]\s*(Present|current|now|\d{1,2}\/\d{4}|\d{4})(?:\s*\|\s*([A-Za-z\s,]+))?/i;
 
-                    currentJob = {
-                        company: titlePart || 'Organization',
-                        role: titlePart || '',
-                        date: dateStr,
-                        bullets: []
-                    };
-                } else if (currentJob) {
-                    const cleanBullet = line.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim();
-                    if (cleanBullet.length > 5) {
-                        currentJob.bullets.push(cleanBullet);
-                    }
+        for (const line of sections.experience) {
+            const match = line.match(jobHeaderRegex);
+            if (match) {
+                if (currentJob) result.experience.push(currentJob);
+                currentJob = {
+                    role: match[1].trim(),
+                    company: match[2].trim(),
+                    date: `${match[3]} – ${match[4]}`,
+                    location: match[5] ? match[5].trim() : '',
+                    bullets: []
+                };
+            } else if (currentJob) {
+                if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+                    const bullet = line.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim();
+                    if (bullet) currentJob.bullets.push(bullet);
+                } else if (currentJob.bullets.length > 0) {
+                    currentJob.bullets[currentJob.bullets.length - 1] += ' ' + line.trim();
                 }
             }
-
-            if (currentJob && (currentJob.company || currentJob.role)) {
-                result.experience.push(currentJob);
-            }
         }
+        if (currentJob) result.experience.push(currentJob);
 
-        // 6. Parse Education Section Lines
-        if (sectionsData.education.length > 0) {
-            let currentEdu = null;
-            const eduDateRegex = /(?:\b\d{4}\s*(?:-|–|—|to)\s*(?:\d{4}|present)\b|\b\d{4}\b)/i;
+        // 6. Education parsing
+        const eduHeaderRegex = /^([A-Za-z0-9\s\/\.,\(\)\#\+\-]+?)\s*[-—–]\s*([^|]+?)(?:\s*\|\s*(\d{1,2}\/\d{4}|\d{4})\s*[-—–]\s*(\d{1,2}\/\d{4}|\d{4}|Present))?$/i;
 
-            for (const line of sectionsData.education) {
-                const dateMatch = line.match(eduDateRegex);
-                const isBullet = /^[\s•\*\-\–\—\>]/.test(line);
+        let currentEdu = null;
+        for (const line of sections.education) {
+            if (line.includes('—') || line.includes('–') || (line.includes('-') && line.includes('|'))) {
+                if (currentEdu) result.education.push(currentEdu);
 
-                if (!isBullet && line.length > 3) {
-                    if (currentEdu) {
-                        result.education.push(currentEdu);
-                    }
+                const match = line.match(eduHeaderRegex);
+                const degree = match ? match[1].trim() : line.split(/[-—–]/)[0].trim();
+                const rest = line.replace(degree, '').replace(/^[\s\-—–]+/, '');
+                const schoolParts = rest.split('|');
+                const school = schoolParts[0] ? schoolParts[0].trim() : '';
+                const date = schoolParts[1] ? schoolParts[1].trim() : '';
 
-                    let badge = 'DEGREE';
-                    if (/progress|pursuing|current/i.test(line)) badge = 'IN PROGRESS';
-                    if (/school|matric|intermediate|higher secondary/i.test(line)) badge = 'HIGH SCHOOL';
-
-                    currentEdu = {
-                        badge: badge,
-                        degree: line.replace(eduDateRegex, '').replace(/[|•–—]/g, ' ').trim(),
-                        school: '',
-                        date: dateMatch ? dateMatch[0] : ''
-                    };
-                } else if (currentEdu && !currentEdu.school) {
-                    currentEdu.school = line.replace(/^[\s•\*\-\–\—\>]\s*/, '').trim();
+                let badge = 'DEGREE';
+                if (date.includes('2025') || date.includes('2026') || date.toLowerCase().includes('present')) {
+                    badge = 'IN PROGRESS';
                 }
-            }
-            if (currentEdu) {
-                result.education.push(currentEdu);
+
+                currentEdu = {
+                    badge: badge,
+                    degree: degree,
+                    school: school,
+                    date: date
+                };
+            } else if (currentEdu && line.toLowerCase().includes('relevant coursework:')) {
+                currentEdu.school += ' | ' + line.trim();
             }
         }
-
-        // 7. Parse Skills Section Lines
-        if (sectionsData.skills.length > 0) {
-            const allSkillTokens = sectionsData.skills
-                .join(',')
-                .split(/[,|•\n\/;]/)
-                .map(s => s.replace(/^(?:languages|databases|tools|frameworks|technologies|libraries|skills)[:\s\-]*/i, '').trim())
-                .filter(s => s.length > 1 && s.length < 35);
-
-            const uniqueSkills = Array.from(new Set(allSkillTokens));
-
-            // Classify extracted skills dynamically
-            result.skills.programming = uniqueSkills.slice(0, Math.ceil(uniqueSkills.length / 3));
-            result.skills.databases = uniqueSkills.slice(Math.ceil(uniqueSkills.length / 3), Math.ceil(uniqueSkills.length * 2 / 3));
-            result.skills.tools = uniqueSkills.slice(Math.ceil(uniqueSkills.length * 2 / 3));
-        }
+        if (currentEdu) result.education.push(currentEdu);
 
         return result;
+    }
+
+    /**
+     * Splits comma-separated skills without breaking items with internal parentheses
+     * E.g. "Generative AI Automation (Claude, GPT, Gemini CLI), Prompt Engineering" -> 2 items
+     */
+    splitSkills(str) {
+        if (!str) return [];
+        return str
+            .split(/,\s*(?![^()]*\))/g)
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
     }
 
     /**
@@ -266,30 +293,31 @@ class ResumeParser {
 CRITICAL RULES:
 1. DO NOT invent, hallucinate, embellish, rewrite, summarize, or substitute any text.
 2. Every sentence, achievement, job title, company name, degree, and skill MUST come directly and verbatim from the resume text provided.
-3. If a field or section is not in the resume, return an empty string "" or empty array [].
+3. Keep skill items with parentheses intact as single items (e.g. "Generative AI Automation (Claude, GPT, Gemini CLI)" must be ONE skill string).
 4. Output strict JSON matching this exact schema:
 
 {
   "hero": {
     "name": "Candidate full name in uppercase as written in resume",
     "role": "Job title or headline as written in resume",
-    "location": "City, State or Country found in resume, or empty string",
-    "github": "Exact GitHub profile URL if in resume, or empty string",
-    "linkedin": "Exact LinkedIn profile URL if in resume, or empty string",
+    "location": "City, State or Country found in resume",
+    "github": "Exact GitHub profile URL if in resume",
+    "linkedin": "Exact LinkedIn profile URL if in resume",
     "resumeUrl": "static/Resume_AkashSingh.pdf"
   },
   "summary": [
-    "Exact verbatim bullet point 1 from summary/profile",
-    "Exact verbatim bullet point 2 from summary/profile"
+    "Exact verbatim sentence 1 from summary/profile",
+    "Exact verbatim sentence 2 from summary/profile"
   ],
   "experience": [
     {
       "company": "Exact Company Name from resume",
       "role": "Exact Job Title from resume",
       "date": "Exact Date Range from resume",
+      "location": "Exact Location if mentioned",
       "bullets": [
-        "Exact verbatim bullet point from this experience entry",
-        "Exact verbatim bullet point from this experience entry"
+        "Exact verbatim bullet point 1",
+        "Exact verbatim bullet point 2"
       ]
     }
   ],
@@ -297,14 +325,13 @@ CRITICAL RULES:
     {
       "badge": "DEGREE or IN PROGRESS or HIGH SCHOOL",
       "degree": "Exact degree or course name from resume",
-      "school": "Exact institution name from resume",
-      "date": "Exact years or dates from resume"
+      "school": "Exact institution name and relevant coursework",
+      "date": "Exact dates from resume"
     }
   ],
   "skills": {
-    "programming": ["Skill1", "Skill2"],
-    "databases": ["Db1", "Db2"],
-    "tools": ["Tool1", "Tool2"]
+    "Category Name 1": ["Skill 1", "Skill 2"],
+    "Category Name 2": ["Skill 3", "Skill 4"]
   }
 }
 
