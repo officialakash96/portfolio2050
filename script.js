@@ -51,40 +51,23 @@ class VisitTracker {
     }
 
     checkReturnVisitorUnlock() {
-        // Requirement: 2nd+ visit automatically showcases and unlocks the game on the page!
+        // Requirement: 2nd+ visit showcases the arcade unlock, but waits for user to manually start!
         if (this.visitCount >= 2) {
             const banner = document.getElementById('return-visitor-banner');
             const quickPlayBtn = document.getElementById('quick-play-btn');
             const dismissBtn = document.getElementById('dismiss-banner-btn');
             const terminalGreeting = document.getElementById('terminal-greeting');
             const gameTrigger = document.getElementById('game-trigger');
-            const gameContainer = document.getElementById('game-container');
             const gPreloader = document.getElementById('game-preloader');
             const terminalMsg = document.querySelector('.terminal-msg');
 
-            // 1. Immediately make the game section visible and active on 2nd visit
+            // 1. Prepare the game terminal section ready for manual start
             if (gameTrigger) {
                 gameTrigger.style.opacity = '1';
                 gameTrigger.style.transform = 'none';
             }
             if (gPreloader) gPreloader.classList.add('hidden');
-            if (terminalMsg) terminalMsg.classList.add('hidden');
-            if (gameContainer) {
-                gameContainer.classList.remove('hidden');
-                gameContainer.classList.add('active');
-            }
-
-            // Launch game engine
-            const launchGame = () => {
-                if (window.cyberGame) {
-                    window.cyberGame.start();
-                }
-            };
-            if (document.readyState === 'complete') {
-                setTimeout(launchGame, 100);
-            } else {
-                window.addEventListener('load', () => setTimeout(launchGame, 200));
-            }
+            if (terminalMsg) terminalMsg.classList.remove('hidden');
 
             if (terminalGreeting) {
                 terminalGreeting.textContent = `WELCOME BACK AGENT #${this.visitCount}! CYBER-ARCADE UNLOCKED🎁`;
@@ -103,6 +86,9 @@ class VisitTracker {
                             gameTrigger.scrollIntoView({ behavior: 'smooth' });
                         }
                         banner.classList.add('hidden');
+                        if (window.cyberGame) {
+                            window.cyberGame.start();
+                        }
                     });
                 }
 

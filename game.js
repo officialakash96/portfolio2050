@@ -475,11 +475,6 @@ class Game {
         // Draw initial canvas frame immediately so it's ready upon display
         this.draw();
 
-        // Check if 2nd+ visit is already active
-        if (window.visitTracker && window.visitTracker.visitCount >= 2) {
-            this.start();
-        }
-
         // Visibility & focus listener
         window.addEventListener('gameVisibilityChange', (e) => {
             const isVisible = e.detail.isVisible;
