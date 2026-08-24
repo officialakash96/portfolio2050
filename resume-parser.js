@@ -252,16 +252,33 @@ Return ONLY valid raw JSON with NO markdown blocks, NO backticks, and NO convers
 Resume Content:
 ${rawText.slice(0, 10000)}`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${this.geminiApiKey}`, {
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                temperature: 0.1
+            }
+        };
+
+        // Try gemini-1.5-flash (Google AI Studio free tier model)
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify(payload)
         });
 
+        // If 1.5-flash has an issue, try gemini-2.0-flash
         if (!response.ok) {
-            throw new Error(`Gemini API error: ${response.statusText}`);
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.geminiApiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData?.error?.message || response.statusText);
         }
 
         const data = await response.json();
