@@ -197,12 +197,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Hero Entrance Animation
             const heroTl = gsap.timeline();
-            heroTl.from('.profile-container', { duration: 1.2, y: 60, opacity: 0, ease: 'expo.out' })
-                  .from('.hero-content h1', { duration: 0.8, x: -60, opacity: 0, ease: 'power3.out' }, '-=0.8')
-                  .from('.typewriter-text', { duration: 0.8, opacity: 0, y: 10, ease: 'power2.out' }, '-=0.5')
-                  .from('.contact-info span', { duration: 0.6, y: 15, opacity: 0, stagger: 0.1, ease: 'power2.out' }, '-=0.4')
-                  .from('.social-links a', { duration: 0.6, y: 15, opacity: 0, stagger: 0.1, ease: 'power2.out' }, '-=0.4')
-                  .from('.hero-actions .cyber-btn', { duration: 0.8, scale: 0.9, opacity: 0, ease: 'back.out(1.4)' }, '-=0.3');
+            heroTl.from('.profile-container', { duration: 1.2, y: 60, opacity: 0, ease: 'expo.out', clearProps: 'all' })
+                  .from('.hero-content h1', { duration: 0.8, x: -60, opacity: 0, ease: 'power3.out', clearProps: 'all' }, '-=0.8')
+                  .from('.typewriter-text', { duration: 0.8, opacity: 0, y: 10, ease: 'power2.out', clearProps: 'all' }, '-=0.5')
+                  .from('.contact-info span', { duration: 0.6, y: 15, opacity: 0, stagger: 0.1, ease: 'power2.out', clearProps: 'all' }, '-=0.4')
+                  .from('.social-links a', { duration: 0.6, y: 15, opacity: 0, stagger: 0.1, ease: 'power2.out', clearProps: 'all' }, '-=0.4')
+                  .from('.hero-actions .cyber-btn', { duration: 0.8, scale: 0.9, opacity: 0, ease: 'back.out(1.4)', clearProps: 'all' }, '-=0.3');
 
             // Section Reveals (Including Game Trigger on 1st visit)
             document.querySelectorAll('.reveal').forEach((el) => {
@@ -250,7 +250,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 4. Performance & Visibility Listeners for Game Engine
+    // 4. Dynamic Profile Hydration on Load
+    if (window.cyberSupabase) {
+        window.cyberSupabase.fetchSiteContent().then(content => {
+            if (content && window.cyberHydrateSite) {
+                window.cyberHydrateSite(content);
+            }
+        });
+    }
+
+    // 5. Performance & Visibility Listeners for Game Engine
     const gameCanvas = document.getElementById('cybertruck-game');
     if (gameCanvas) {
         const observer = new IntersectionObserver((entries) => {
@@ -278,3 +287,109 @@ document.addEventListener('DOMContentLoaded', () => {
         window.dispatchEvent(new CustomEvent('gameVisibilityChange', { detail: { isVisible: true } }));
     });
 });
+
+/**
+ * Dynamic Profile Hydration Engine
+ * Populates DOM elements dynamically from Supabase database / local cache
+ * with graceful fallback to hardcoded markup.
+ */
+window.cyberHydrateSite = function(data) {
+    if (!data) return;
+
+    try {
+        // 1. Hero & Contact Info
+        if (data.hero) {
+            const nameEl = document.getElementById('hero-name');
+            const roleEl = document.getElementById('role');
+            const locEl = document.getElementById('hero-location-text');
+            const ghEl = document.getElementById('hero-github-link');
+            const liEl = document.getElementById('hero-linkedin-link');
+            const resumeBtn = document.getElementById('hero-resume-download');
+
+            if (nameEl && data.hero.name) {
+                nameEl.textContent = data.hero.name;
+                nameEl.setAttribute('data-text', data.hero.name);
+            }
+            if (roleEl && data.hero.role) {
+                roleEl.textContent = data.hero.role;
+            }
+            if (locEl && data.hero.location) {
+                locEl.textContent = data.hero.location;
+            }
+            if (ghEl && data.hero.github) {
+                ghEl.href = data.hero.github;
+            }
+            if (liEl && data.hero.linkedin) {
+                liEl.href = data.hero.linkedin;
+            }
+            if (resumeBtn && data.hero.resumeUrl) {
+                resumeBtn.href = data.hero.resumeUrl;
+            }
+        }
+
+        // 2. Summary Section
+        if (Array.isArray(data.summary) && data.summary.length > 0) {
+            const summaryList = document.getElementById('summary-bullets-list');
+            if (summaryList) {
+                summaryList.innerHTML = data.summary.map(bullet => `<li>${bullet}</li>`).join('');
+            }
+        }
+
+        // 3. Work History Section
+        if (Array.isArray(data.experience) && data.experience.length > 0) {
+            const timeline = document.getElementById('timeline-container');
+            if (timeline) {
+                timeline.innerHTML = data.experience.map(exp => `
+                    <div class="timeline-item reveal" style="opacity: 1; transform: none;">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content card glass">
+                            <div class="experience-header">
+                                <div>
+                                    <h3>${exp.role || ''}</h3>
+                                    <span class="company">${exp.company || ''}</span>
+                                </div>
+                                <span class="date">${exp.date || ''}</span>
+                            </div>
+                            <ul>
+                                ${(exp.bullets || []).map(b => `<li>${b}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 4. Academic Records
+        if (Array.isArray(data.education) && data.education.length > 0) {
+            const eduGrid = document.getElementById('education-grid-container');
+            if (eduGrid) {
+                eduGrid.innerHTML = data.education.map(edu => `
+                    <div class="card glass reveal" style="opacity: 1; transform: none;">
+                        <div class="edu-badge"><i class="fas fa-certificate"></i> ${edu.badge || 'DEGREE'}</div>
+                        <h3>${edu.degree || ''}</h3>
+                        <p class="edu-school">${edu.school || ''}</p>
+                        <span class="date">${edu.date || ''}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 5. Skills
+        if (data.skills) {
+            if (Array.isArray(data.skills.programming) && data.skills.programming.length > 0) {
+                const progTags = document.getElementById('skills-programming-tags');
+                if (progTags) progTags.innerHTML = data.skills.programming.map(s => `<span>${s}</span>`).join('');
+            }
+            if (Array.isArray(data.skills.databases) && data.skills.databases.length > 0) {
+                const dbTags = document.getElementById('skills-database-tags');
+                if (dbTags) dbTags.innerHTML = data.skills.databases.map(s => `<span>${s}</span>`).join('');
+            }
+            if (Array.isArray(data.skills.tools) && data.skills.tools.length > 0) {
+                const toolTags = document.getElementById('skills-tools-tags');
+                if (toolTags) toolTags.innerHTML = data.skills.tools.map(s => `<span>${s}</span>`).join('');
+            }
+        }
+    } catch (e) {
+        console.warn('[cyberHydrateSite] Hydration warning:', e);
+    }
+};
